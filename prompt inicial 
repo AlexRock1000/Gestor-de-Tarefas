@@ -1,0 +1,15 @@
+
+> "Atue como um Arquiteto de Software e Product Owner. Com base no Plano de Ação de Reorganização Operacional e IA, elabore a especificação funcional e técnica para o desenvolvimento de uma aplicação web de gerenciamento de progresso e tarefas (Kanban / Checklists Inteligentes).
+> A especificação deve incluir:
+>  * Requisitos Funcionais Principais:
+>    * Dashboard de progresso geral por Fase (Estoque, Documentação, Processos).
+>    * Sistema de checklist interativo para acompanhamento passo a passo.
+>    * Matriz de priorização (GUT) integrada para classificar tarefas automaticamente.
+>    * Assistente/Prompt Helper para copiar prompts de IA diretamente da interface.
+>  * Modelagem de Dados (Entidades Principais):
+>    * Tabelas/coleções necessárias (Fases, Tarefas, MatrizGUT, PromptsIA, LogsProgresso).
+>  * Sugestão de Stack Tecnológica:
+>    * Backend, Frontend, Banco de Dados e Hospedagem gratuita/acessível.
+>  * Roteiro de Desenvolvimento (MVP em Ciclos/Sprints):
+>    * O que construir na versão mínima viável (MVP) e nas expansões futuras."
+> 
