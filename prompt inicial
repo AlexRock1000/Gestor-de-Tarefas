@@ -1,15 +1,51 @@
+Especificação Funcional e Técnica: Gestor de Reorganização Operacional
+Esta especificação define o desenvolvimento do seu aplicativo de acompanhamento de progresso, integrando a matriz de priorização e facilidades para execução com Inteligência Artificial.
+Requisitos Funcionais
+ * Dashboard de Progresso por Fase: Indicadores visuais de porcentagem de conclusão divididos por módulos (Estoque, Documentação, Processos, Automações).
+ * Matriz GUT Interativa: Interface para cadastro de tarefas com cálculo automático de prioridade (G \times U \times T) e ordenação dinâmica da fila de trabalho.
+ * Checklist Orientado a Ação: Lista de tarefas contendo instruções passo a passo, status (Pendente, Em Andamento, Concluído) e campo de anotações para registro de descobertas.
+ * Hub de Prompts para IA: Botão integrado em cada tarefa para copiar prompts de IA pré-formatados direto para a área de transferência.
+Modelagem de Banco de Dados (PostgreSQL / MySQL)
+CREATE TABLE fases (
+    id SERIAL PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    ordem INT NOT NULL
+);
 
-> "Atue como um Arquiteto de Software e Product Owner. Com base no Plano de Ação de Reorganização Operacional e IA, elabore a especificação funcional e técnica para o desenvolvimento de uma aplicação web de gerenciamento de progresso e tarefas (Kanban / Checklists Inteligentes).
-> A especificação deve incluir:
->  * Requisitos Funcionais Principais:
->    * Dashboard de progresso geral por Fase (Estoque, Documentação, Processos).
->    * Sistema de checklist interativo para acompanhamento passo a passo.
->    * Matriz de priorização (GUT) integrada para classificar tarefas automaticamente.
->    * Assistente/Prompt Helper para copiar prompts de IA diretamente da interface.
->  * Modelagem de Dados (Entidades Principais):
->    * Tabelas/coleções necessárias (Fases, Tarefas, MatrizGUT, PromptsIA, LogsProgresso).
->  * Sugestão de Stack Tecnológica:
->    * Backend, Frontend, Banco de Dados e Hospedagem gratuita/acessível.
->  * Roteiro de Desenvolvimento (MVP em Ciclos/Sprints):
->    * O que construir na versão mínima viável (MVP) e nas expansões futuras."
-> 
+CREATE TABLE tarefas (
+    id SERIAL PRIMARY KEY,
+    fase_id INT REFERENCES fases(id),
+    titulo VARCHAR(150) NOT NULL,
+    descricao TEXT,
+    gravidade INT CHECK (gravidade BETWEEN 1 AND 5),
+    urgencia INT CHECK (urgencia BETWEEN 1 AND 5),
+    tendencia INT CHECK (tendencia BETWEEN 1 AND 5),
+    score_gut INT GENERATED ALWAYS AS (gravidade * urgencia * tendencia) STORED,
+    status VARCHAR(20) DEFAULT 'Pendente',
+    prompt_ia TEXT,
+    criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE logs_progresso (
+    id SERIAL PRIMARY KEY,
+    tarefa_id INT REFERENCES tarefas(id),
+    observacao TEXT,
+    data_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+Stack Tecnológica Sugerida
+| Camada | Tecnologia Recomendada | Justificativa |
+|---|---|---|
+| Backend | Node.js (Express ou Fastify) | API REST leve, assíncrona e de rápida implementação. |
+| Frontend | React com Tailwind CSS | Interface reativa, responsiva e componentes modulares. |
+| Banco de Dados | PostgreSQL | Suporte a colunas geradas (score_gut) e robustez relacional. |
+| Hospedagem | Render / Vercel (Tier Gratuito) | Deploy simplificado via repositório Git sem custos iniciais. |
+Roteiro de Desenvolvimento (MVP)
+Sprint 1: Núcleo e Matriz GUT (MVP)
+ * Estruturação do banco de dados e APIs CRUD para fases e tarefas.
+ * Interface estilo Kanban / Lista ordenada automaticamente pelo score_gut.
+ * Funcionalidade de alteração de status e barra de progresso geral.
+Sprint 2: Integração com IA e Recursos Visuais
+ * Implementação do botão "Copiar Prompt de IA" anexado às tarefas relevantes.
+ * Dashboard com gráficos de pizza/barra (Chart.js) mostrando progresso por fase.
+ * Sistema de logs diários para registrar avanços e anotações operacionais.
