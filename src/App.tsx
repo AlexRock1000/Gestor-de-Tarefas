@@ -9,10 +9,12 @@ import {
   FileText,
   LayoutDashboard,
   ListChecks,
+  MoonStar,
   MoreHorizontal,
   Plus,
   Search,
   Sparkles,
+  SunMedium,
   Target,
   X,
 } from 'lucide-react'
@@ -171,6 +173,7 @@ const computeScore = (gravidade: number, urgencia: number, tendencia: number) =>
 const storageKey = 'gestor-de-tarefas-v1'
 
 function App() {
+  const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (typeof window === 'undefined') {
       return initialTasks
@@ -406,7 +409,7 @@ function App() {
   const highPriorityCount = tasks.filter((task) => task.scoreGut >= 80 && task.status !== 'Concluído').length
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark"><Sparkles size={17} /></div>
@@ -469,6 +472,14 @@ function App() {
               <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar tarefa..." />
               <kbd>⌘ K</kbd>
             </div>
+            <button
+              className="theme-toggle"
+              onClick={() => setTheme((current) => (current === 'dark' ? 'light' : 'dark'))}
+              aria-label="Alternar tema"
+            >
+              {theme === 'dark' ? <SunMedium size={15} /> : <MoonStar size={15} />}
+              <span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span>
+            </button>
             <button className="icon-button" aria-label="Notificações"><Bell size={18} /><i /></button>
             <button className="avatar-button">DR</button>
           </div>
