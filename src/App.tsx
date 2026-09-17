@@ -190,6 +190,7 @@ function App() {
     }
   })
   const [activePhase, setActivePhase] = useState<'Todas' | Phase>('Todas')
+  const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos')
   const [activeView, setActiveView] = useState('Visão geral')
   const [search, setSearch] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
@@ -224,20 +225,24 @@ function App() {
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
       const phaseMatches = activePhase === 'Todas' || task.phase === activePhase
-      return phaseMatches && task.title.toLowerCase().includes(search.toLowerCase())
+      const statusMatches = statusFilter === 'Todos' || task.status === statusFilter
+      const titleMatches = task.title.toLowerCase().includes(search.toLowerCase())
+      return phaseMatches && statusMatches && titleMatches
     })
 
     return [...filtered].sort((a, b) => b.scoreGut - a.scoreGut)
-  }, [activePhase, search, tasks])
+  }, [activePhase, search, statusFilter, tasks])
 
-  const totalProgress = Math.round(
-    tasks.reduce((sum, task) => {
-      if (task.status === 'Concluído') return sum + 100
-      const completed = task.checklist.filter((item) => item.done).length
-      const percent = task.checklist.length ? (completed / task.checklist.length) * 100 : 0
-      return sum + percent
-    }, 0) / tasks.length,
-  )
+  const totalProgress = tasks.length
+    ? Math.round(
+        tasks.reduce((sum, task) => {
+          if (task.status === 'Concluído') return sum + 100
+          const completed = task.checklist.filter((item) => item.done).length
+          const percent = task.checklist.length ? (completed / task.checklist.length) * 100 : 0
+          return sum + percent
+        }, 0) / tasks.length,
+      )
+    : 0
 
   const updateTask = (taskId: number, updates: Partial<Task>) => {
     setTasks((current) =>
@@ -300,6 +305,63 @@ function App() {
 
     setTasks((current) => [...current, newTask])
     setSelectedTaskId(newTask.id)
+  }
+
+  const deleteTask = (taskId: number) => {
+    setTasks((current) => {
+      const nextTasks = current.filter((task) => task.id !== taskId)
+      if (selectedTaskId === taskId) {
+        setSelectedTaskId(nextTasks[0]?.id ?? null)
+      }
+      return nextTasks
+    })
+  }
+
+  const addChecklistItem = (taskId: number) => {
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id !== taskId) {
+          return task
+        }
+
+        return {
+          ...task,
+          checklist: [...task.checklist, { label: `Novo item ${task.checklist.length + 1}`, done: false }],
+        }
+      }),
+    )
+  }
+
+  const removeChecklistItem = (taskId: number, itemIndex: number) => {
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id !== taskId) {
+          return task
+        }
+
+        return {
+          ...task,
+          checklist: task.checklist.filter((_, index) => index !== itemIndex),
+        }
+      }),
+    )
+  }
+
+  const updateChecklistLabel = (taskId: number, itemIndex: number, label: string) => {
+    setTasks((current) =>
+      current.map((task) => {
+        if (task.id !== taskId) {
+          return task
+        }
+
+        return {
+          ...task,
+          checklist: task.checklist.map((item, index) =>
+            index === itemIndex ? { ...item, label } : item,
+          ),
+        }
+      }),
+    )
   }
 
   const copyPrompt = async (task: Task) => {
@@ -446,7 +508,7 @@ function App() {
 
             <div className="metric-card">
               <div className="metric-top"><span>Em dia</span><Check size={17} /></div>
-              <strong>{Math.max(0, 100 - Math.round((highPriorityCount / tasks.length) * 100))}%</strong>
+              <strong>{tasks.length ? Math.max(0, 100 - Math.round((highPriorityCount / tasks.length) * 100)) : 0}%</strong>
               <div className="metric-caption">tarefas dentro do calendário</div>
             </div>
           </section>
@@ -484,15 +546,31 @@ function App() {
                   <p>Prioridades para manter o plano em movimento.</p>
                 </div>
 
-                <div className="filter-tabs">
-                  <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas</button>
-                  {phases.map((phase) => (
-                    <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
-                  ))}
+                <div className="filter-group">
+                  <div className="filter-tabs">
+                    <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas</button>
+                    {phases.map((phase) => (
+                      <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
+                    ))}
+                  </div>
+
+                  <div className="status-tabs">
+                    <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos</button>
+                    {statusOrder.map((status) => (
+                      <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                    ))}
+                  </div>
                 </div>
               </div>
 
               <div className="task-list">
+                {!visibleTasks.length && (
+                  <div className="empty-state">
+                    <strong>Nenhuma tarefa encontrada</strong>
+                    <span>Ajuste o filtro ou crie uma nova tarefa.</span>
+                  </div>
+                )}
+
                 {visibleTasks.map((task) => (
                   <article className="task-row" key={task.id} onClick={() => setSelectedTaskId(task.id)}>
                     <div
@@ -659,11 +737,24 @@ function App() {
               <span>{selectedTask.checklist.filter((item) => item.done).length}/{selectedTask.checklist.length}</span>
             </div>
 
+            <button className="secondary-button add-item-button" onClick={() => addChecklistItem(selectedTask.id)}>
+              + Adicionar item
+            </button>
+
             {selectedTask.checklist.map((item, index) => (
-              <label className="check-item" key={`${selectedTask.id}-${item.label}`}>
-                <input type="checkbox" checked={item.done} onChange={() => toggleChecklist(selectedTask.id, index)} />
-                <span>{item.label}</span>
-              </label>
+              <div className="check-item-row" key={`${selectedTask.id}-${item.label}-${index}`}>
+                <label className="check-item">
+                  <input type="checkbox" checked={item.done} onChange={() => toggleChecklist(selectedTask.id, index)} />
+                  <input
+                    value={item.label}
+                    onChange={(event) => updateChecklistLabel(selectedTask.id, index, event.target.value)}
+                    className="check-item-input"
+                  />
+                </label>
+                <button className="remove-item-button" onClick={() => removeChecklistItem(selectedTask.id, index)} aria-label="Remover item">
+                  ×
+                </button>
+              </div>
             ))}
           </div>
 
@@ -681,6 +772,9 @@ function App() {
           <div className="drawer-actions">
             <button className="secondary-button" onClick={() => setEditingTask({ ...selectedTask })}>
               Editar tarefa
+            </button>
+            <button className="danger-button" onClick={() => deleteTask(selectedTask.id)}>
+              Excluir tarefa
             </button>
             <button className="prompt-button large" onClick={() => void copyPrompt(selectedTask)}>
               {copiedTaskId === selectedTask.id ? <><Check size={15} /> Prompt copiado</> : <><Clipboard size={15} /> Copiar prompt de IA</>}

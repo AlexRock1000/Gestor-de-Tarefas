@@ -491,21 +491,45 @@ h2 {
 
 .tasks-panel { overflow: hidden; }
 .panel-header { padding: 19px 20px 14px; }
-.filter-tabs { display: flex; gap: 3px; border-bottom: 1px solid var(--line); }
-.filter-tabs button {
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.filter-tabs,
+.status-tabs { display: flex; gap: 3px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.filter-tabs button,
+.status-tabs button {
   background: none;
   border: 0;
   padding: 0 7px 9px;
   color: #a0a39d;
   font-size: 10px;
 }
-.filter-tabs button.selected {
+.filter-tabs button.selected,
+.status-tabs button.selected {
   color: var(--ink);
   border-bottom: 2px solid var(--teal);
   font-weight: 700;
 }
 
 .task-list { border-top: 1px solid var(--line); }
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 160px;
+  color: #7c857f;
+  text-align: center;
+  padding: 20px;
+}
+
+.empty-state strong { color: var(--ink); font-size: 14px; }
+.empty-state span { font-size: 11px; }
 .task-row {
   min-height: 68px;
   padding: 13px 18px;
@@ -790,6 +814,57 @@ due-date {
   font-weight: 600;
 }
 
+.danger-button {
+  border: 1px solid #efc4bf;
+  background: #fff2f0;
+  color: #b7473b;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.add-item-button {
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+.check-item-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.check-item {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+  padding: 9px 0;
+  font-size: 11px;
+  color: #606861;
+  border-bottom: 1px solid #efede8;
+  flex: 1;
+}
+
+.check-item-input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  outline: none;
+}
+
+.remove-item-button {
+  border: 0;
+  background: transparent;
+  color: #8d9a94;
+  font-size: 18px;
+  line-height: 1;
+  padding: 0;
+}
+
 .gut-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -837,15 +912,6 @@ due-date {
   font: 400 10px 'DM Sans';
 }
 
-.check-item {
-  display: flex;
-  gap: 9px;
-  align-items: center;
-  padding: 9px 0;
-  font-size: 11px;
-  color: #606861;
-  border-bottom: 1px solid #efede8;
-}
 .check-item input { accent-color: var(--teal); }
 
 .notes-section textarea {
