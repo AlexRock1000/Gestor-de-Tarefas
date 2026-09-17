@@ -1,15 +1,203 @@
 
-> "Atue como um Arquiteto de Software e Product Owner. Com base no Plano de Ação de Reorganização Operacional e IA, elabore a especificação funcional e técnica para o desenvolvimento de uma aplicação web de gerenciamento de progresso e tarefas (Kanban / Checklists Inteligentes).
-> A especificação deve incluir:
->  * Requisitos Funcionais Principais:
->    * Dashboard de progresso geral por Fase (Estoque, Documentação, Processos).
->    * Sistema de checklist interativo para acompanhamento passo a passo.
->    * Matriz de priorização (GUT) integrada para classificar tarefas automaticamente.
->    * Assistente/Prompt Helper para copiar prompts de IA diretamente da interface.
->  * Modelagem de Dados (Entidades Principais):
->    * Tabelas/coleções necessárias (Fases, Tarefas, MatrizGUT, PromptsIA, LogsProgresso).
->  * Sugestão de Stack Tecnológica:
->    * Backend, Frontend, Banco de Dados e Hospedagem gratuita/acessível.
->  * Roteiro de Desenvolvimento (MVP em Ciclos/Sprints):
->    * O que construir na versão mínima viável (MVP) e nas expansões futuras."
-> 
+# Especificação funcional e técnica: Gestor de Tarefas
+
+## 1. Visão do produto
+
+Aplicação web para organizar e acompanhar a execução do Plano de Ação de Reorganização Operacional e IA. O produto combina um quadro Kanban, checklists inteligentes, priorização GUT e uma biblioteca de prompts reutilizáveis.
+
+### Objetivo do MVP
+
+Permitir que uma pessoa cadastre tarefas nas fases **Estoque**, **Documentação** e **Processos**, defina sua prioridade, execute os itens passo a passo e acompanhe o progresso consolidado em um dashboard.
+
+### Usuários e permissões
+
+- **Administrador:** gerencia fases, tarefas, usuários e prompts.
+- **Colaborador:** cria e atualiza tarefas, checklists e avaliações GUT.
+- **Leitor:** consulta dashboard e tarefas, sem editar.
+
+No MVP, pode existir apenas um usuário administrador autenticado. O modelo deve preservar `user_id` para permitir expansão multiusuário.
+
+## 2. Requisitos funcionais
+
+### RF01 - Dashboard de progresso
+
+- Exibir progresso geral e progresso por fase.
+- Calcular o percentual de conclusão como tarefas concluídas dividido pelo total de tarefas da fase.
+- Mostrar contadores de tarefas por status: a fazer, em andamento, bloqueada e concluída.
+- Destacar tarefas atrasadas, bloqueadas e de prioridade crítica.
+- Permitir filtrar por fase, status, responsável e período.
+
+### RF02 - Quadro Kanban
+
+- Exibir colunas `A fazer`, `Em andamento`, `Bloqueada` e `Concluída`.
+- Permitir criar, editar, arquivar e reordenar tarefas.
+- Permitir mover tarefas entre colunas por arrastar e soltar ou por controle de status.
+- Registrar cada mudança de status no histórico.
+
+### RF03 - Checklist interativo
+
+- Cada tarefa pode conter itens ordenados, com título, descrição e indicador de conclusão.
+- Permitir adicionar, editar, excluir e reordenar itens.
+- Exibir o progresso do checklist, por exemplo `3/5 itens`.
+- Ao concluir todos os itens, sugerir a mudança da tarefa para `Concluída`; a confirmação continua sendo do usuário.
+- Impedir conclusão acidental de um item sem registrar data e autor da alteração.
+
+### RF04 - Priorização GUT
+
+- Registrar notas de 1 a 5 para **Gravidade**, **Urgência** e **Tendência**.
+- Calcular automaticamente `GUT = Gravidade x Urgência x Tendência`.
+- Classificar a pontuação: `1-20 Baixa`, `21-50 Média`, `51-80 Alta`, `81-125 Crítica`.
+- Permitir ordenar o Kanban e a lista pela pontuação GUT.
+- Mostrar a justificativa de cada nota para tornar a priorização auditável.
+- Recalcular a prioridade sempre que uma nota for alterada.
+
+### RF05 - Prompt Helper
+
+- Manter uma biblioteca de prompts por categoria, fase e objetivo.
+- Exibir título, finalidade, variáveis editáveis e conteúdo do prompt.
+- Permitir preencher variáveis, copiar o resultado para a área de transferência e registrar a data da cópia.
+- Permitir vincular um prompt a uma tarefa.
+- Exibir confirmação acessível após a cópia e informar erro quando a permissão da área de transferência for negada.
+
+### RF06 - Busca, filtros e histórico
+
+- Pesquisar tarefas por título, descrição e etiquetas.
+- Filtrar por fase, status, prioridade, responsável e prazo.
+- Exibir histórico de mudanças de status, prazo, prioridade e checklist.
+- Permitir exportar a lista filtrada em CSV em uma versão posterior.
+
+## 3. Regras de negócio
+
+- Toda tarefa deve pertencer a exatamente uma fase.
+- O prazo não pode ser anterior à data de criação sem uma justificativa registrada.
+- Tarefa concluída deve ter data de conclusão; ao reabrir, essa data deve ser removida e o evento deve ser registrado.
+- Tarefa bloqueada deve possuir uma descrição do bloqueio.
+- O progresso da fase considera apenas tarefas não arquivadas.
+- A ordenação padrão é: prioridade GUT decrescente, prazo mais próximo e data de criação mais antiga.
+- Exclusões devem ser lógicas para preservar histórico e auditoria.
+
+## 4. Modelo de dados
+
+### `users`
+
+`id`, `name`, `email`, `role`, `created_at`, `updated_at`
+
+### `phases` (Fases)
+
+`id`, `name`, `description`, `color`, `position`, `active`, `created_at`, `updated_at`
+
+Dados iniciais: `Estoque`, `Documentação`, `Processos`.
+
+### `tasks` (Tarefas)
+
+`id`, `phase_id`, `title`, `description`, `status`, `priority_level`, `due_date`, `owner_id`, `position`, `blocked_reason`, `completed_at`, `archived_at`, `created_at`, `updated_at`
+
+Índices recomendados: `(phase_id, status)`, `due_date`, `priority_level`.
+
+### `checklist_items`
+
+`id`, `task_id`, `title`, `description`, `position`, `completed`, `completed_by`, `completed_at`, `created_at`, `updated_at`
+
+### `gut_scores` (MatrizGUT)
+
+`id`, `task_id`, `severity`, `urgency`, `trend`, `score`, `justification`, `evaluated_by`, `created_at`, `updated_at`
+
+`score` deve ser persistido para facilitar ordenação, mas sempre validado pelo backend a partir das três notas.
+
+### `ai_prompts` (PromptsIA)
+
+`id`, `title`, `category`, `phase_id`, `purpose`, `content_template`, `variables_json`, `active`, `created_by`, `created_at`, `updated_at`
+
+### `progress_logs` (LogsProgresso)
+
+`id`, `task_id`, `user_id`, `event_type`, `old_value_json`, `new_value_json`, `created_at`
+
+Eventos mínimos: `TASK_CREATED`, `STATUS_CHANGED`, `CHECKLIST_UPDATED`, `GUT_UPDATED`, `TASK_COMPLETED`, `TASK_REOPENED`, `PROMPT_COPIED`.
+
+Relacionamentos: uma fase possui muitas tarefas; uma tarefa possui muitos itens de checklist e uma avaliação GUT atual; uma tarefa pode referenciar muitos prompts; cada evento pertence a uma tarefa e a um usuário.
+
+## 5. API mínima
+
+API REST versionada em `/api/v1`:
+
+- `GET /dashboard?phase_id=` - resumo e indicadores.
+- `GET /phases` e `POST /phases` - consultar e criar fases.
+- `GET /tasks` - listar com paginação e filtros.
+- `POST /tasks`, `PATCH /tasks/:id`, `DELETE /tasks/:id` - ciclo de vida da tarefa.
+- `PATCH /tasks/:id/status` - alterar status e gerar log.
+- `GET/POST/PATCH/DELETE /tasks/:id/checklist` - itens do checklist.
+- `GET/PUT /tasks/:id/gut` - consultar e atualizar GUT.
+- `GET/POST/PATCH /prompts` - biblioteca de prompts.
+- `POST /prompts/:id/copy` - registrar uso do prompt.
+- `GET /tasks/:id/logs` - histórico da tarefa.
+
+Todas as entradas devem ser validadas no backend. Respostas de erro devem usar formato consistente, por exemplo `{ "error": { "code": "VALIDATION_ERROR", "message": "..." } }`.
+
+## 6. Stack recomendada
+
+- **Frontend:** React + TypeScript + Vite, React Router, TanStack Query e uma biblioteca de componentes acessíveis.
+- **Backend:** Node.js + TypeScript + NestJS ou Fastify; Zod para validação de contratos.
+- **Banco de dados:** PostgreSQL. Prisma ou Drizzle para migrações e acesso tipado.
+- **Autenticação:** Supabase Auth ou autenticação por sessão/JWT do backend.
+- **Hospedagem acessível:** frontend na Vercel ou Netlify, API na Render ou Railway e PostgreSQL no Supabase/Neon. Escolher apenas um provedor por camada no momento da implantação.
+- **Qualidade:** ESLint, Prettier, testes unitários, testes de API e Playwright para o fluxo principal.
+- **Observabilidade:** logs estruturados, monitoramento de erros e backup automático do banco.
+
+Arquitetura inicial: frontend separado consumindo REST, backend organizado em módulos (`auth`, `phases`, `tasks`, `checklists`, `gut`, `prompts`, `dashboard`) e banco relacional com migrações versionadas.
+
+## 7. Requisitos não funcionais
+
+- Interface responsiva para desktop e celular.
+- Navegação por teclado, labels em formulários, contraste adequado e feedback sem depender apenas de cor.
+- Operações comuns do dashboard devem responder em até 2 segundos em uma base de até 10.000 tarefas.
+- Autorização no backend em todas as rotas de escrita.
+- Segredos somente em variáveis de ambiente; nunca no frontend ou no repositório.
+- Backup diário e política de retenção definida antes da produção.
+- Datas armazenadas em UTC e exibidas no fuso configurado pelo usuário.
+
+## 8. Roadmap do MVP
+
+### Sprint 0 - Fundação
+
+Configurar repositório, TypeScript, lint, CI, banco, migrações, variáveis de ambiente e autenticação básica.
+
+### Sprint 1 - Fases e tarefas
+
+Implementar CRUD de fases e tarefas, status Kanban, responsividade, validações e dados iniciais das três fases.
+
+### Sprint 2 - Checklists e histórico
+
+Implementar itens interativos, cálculo de progresso, conclusão/reabertura e logs de alteração.
+
+### Sprint 3 - Dashboard e GUT
+
+Implementar indicadores por fase, filtros, alertas de prazo, avaliação GUT e ordenação por prioridade.
+
+### Sprint 4 - Prompt Helper e entrega
+
+Implementar biblioteca de prompts, variáveis, cópia, vínculo com tarefa, testes de aceitação, documentação e deploy.
+
+### Critérios de aceite do MVP
+
+- Usuário autenticado consegue criar uma tarefa em cada uma das três fases.
+- Tarefa pode percorrer o Kanban e todas as mudanças aparecem no histórico.
+- Checklist atualiza seu percentual sem recarregar a página.
+- GUT é calculada corretamente e a lista pode ser ordenada pela pontuação.
+- Dashboard apresenta números coerentes com as tarefas não arquivadas.
+- Usuário consegue preencher e copiar um prompt sem expor dados sensíveis no navegador.
+- Testes automatizados cobrem cálculo GUT, progresso e alteração de status.
+
+## 9. Evoluções posteriores
+
+- Multiusuário completo com equipes, permissões por fase e comentários.
+- Notificações de prazo e tarefas bloqueadas por e-mail ou push.
+- Recorrência, dependências entre tarefas, etiquetas e anexos.
+- Importação/exportação CSV e relatórios históricos.
+- Integração com provedores de IA para sugerir checklists e rascunhos de prompts, sempre com revisão humana.
+- PWA com suporte offline, auditoria avançada e métricas de produtividade.
+
+## 10. Riscos e decisões pendentes
+
+- Definir o Plano de Ação detalhado que fornecerá as tarefas iniciais e os prompts oficiais.
+- Confirmar se haverá dados sensíveis; se houver, definir classificação, retenção e mascaramento antes da integração com IA.
+- Escolher o provedor final de hospedagem após validar limites do plano gratuito, região, backups e custo de crescimento.
