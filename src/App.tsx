@@ -20,6 +20,7 @@ import {
   Upload,
   X,
 } from 'lucide-react'
+import { computeScore, getDueState, type DueState } from './taskUtils'
 
 type Status = 'Pendente' | 'Em Andamento' | 'Concluído'
 type Phase = 'Estoque' | 'Documentação' | 'Processos' | 'Automações'
@@ -58,7 +59,6 @@ type Activity = {
 
 type DeadlineFilter = 'Todos' | 'Em aberto' | 'Concluídas'
 type GutFilter = 'Todos' | 'Críticas (80+)' | 'Altas (50-79)' | 'Baixas (até 49)'
-type DueState = 'overdue' | 'today' | 'upcoming' | 'completed' | 'undated'
 
 const phases: { name: Phase; tone: string; accent: string }[] = [
   { name: 'Estoque', tone: 'teal', accent: '#17847c' },
@@ -198,40 +198,8 @@ const initialTasks: Task[] = [
   },
 ]
 
-const computeScore = (gravidade: number, urgencia: number, tendencia: number) => gravidade * urgencia * tendencia
 const storageKey = 'gestor-de-tarefas-v1'
 const activityStorageKey = `${storageKey}-activity`
-const monthIndexes: Record<string, number> = {
-  jan: 0,
-  fev: 1,
-  mar: 2,
-  abr: 3,
-  mai: 4,
-  jun: 5,
-  jul: 6,
-  ago: 7,
-  set: 8,
-  out: 9,
-  nov: 10,
-  dez: 11,
-}
-
-const getDueState = (task: Task): DueState => {
-  if (task.status === 'Concluído' || task.due === 'Concluída') return 'completed'
-  if (task.due === 'Hoje') return 'today'
-
-  const match = task.due.toLowerCase().match(/^(\d{1,2})\s+([a-zç]+)$/)
-  if (!match) return 'undated'
-
-  const month = monthIndexes[match[2].slice(0, 3)]
-  if (month === undefined) return 'undated'
-
-  const dueDate = new Date(new Date().getFullYear(), month, Number(match[1]))
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  dueDate.setHours(0, 0, 0, 0)
-  return dueDate < today ? 'overdue' : 'upcoming'
-}
 
 const dueStateLabels: Record<DueState, string> = {
   overdue: 'Atrasada',
@@ -239,6 +207,28 @@ const dueStateLabels: Record<DueState, string> = {
   upcoming: 'No prazo',
   completed: 'Concluída',
   undated: 'Sem prazo',
+}
+
+const monthLabels = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez']
+
+const dueToInputValue = (due: string) => {
+  if (due === 'Hoje') {
+    return new Date().toISOString().slice(0, 10)
+  }
+
+  const match = due.toLowerCase().match(/^(\d{1,2})\s+([a-zç]+)$/)
+  if (!match) return ''
+  const month = monthLabels.indexOf(match[2].slice(0, 3))
+  if (month < 0) return ''
+  return `${new Date().getFullYear()}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}`
+}
+
+const inputValueToDue = (value: string) => {
+  if (!value) return 'Sem prazo'
+  const selected = new Date(`${value}T00:00:00`)
+  const today = new Date()
+  if (selected.toDateString() === today.toDateString()) return 'Hoje'
+  return `${selected.getDate()} ${monthLabels[selected.getMonth()]}`
 }
 
 const initialActivities: Activity[] = [
@@ -529,7 +519,7 @@ function App() {
       task.responsible,
       task.due,
       task.scoreGut,
-      dueStateLabels[getDueState(task)],
+      dueStateLabels[getDueState(task.due, task.status)],
     ])
     const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(';')).join('\n')
     const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
@@ -651,10 +641,10 @@ function App() {
   const highPriorityCount = tasks.filter((task) => task.scoreGut >= 80 && task.status !== 'Concluído').length
   const alertTasks = tasks
     .filter((task) => task.status !== 'Concluído')
-    .filter((task) => getDueState(task) === 'overdue' || getDueState(task) === 'today' || task.scoreGut >= 80)
+    .filter((task) => getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' || task.scoreGut >= 80)
     .sort((a, b) => {
       const stateWeight = (state: DueState) => state === 'overdue' ? 3 : state === 'today' ? 2 : 1
-      return stateWeight(getDueState(b)) - stateWeight(getDueState(a)) || b.scoreGut - a.scoreGut
+      return stateWeight(getDueState(b.due, b.status)) - stateWeight(getDueState(a.due, a.status)) || b.scoreGut - a.scoreGut
     })
   const alertCount = alertTasks.length
   const hasActiveFilters = Boolean(
@@ -777,10 +767,10 @@ function App() {
                         setNotificationsOpen(false)
                       }}
                     >
-                      <span className={`notification-dot ${getDueState(task)}`} />
+                      <span className={`notification-dot ${getDueState(task.due, task.status)}`} />
                       <span>
                         <strong>{task.title}</strong>
-                        <small>{getDueState(task) === 'overdue' || getDueState(task) === 'today' ? dueStateLabels[getDueState(task)] : `GUT ${task.scoreGut}`}</small>
+                        <small>{getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' ? dueStateLabels[getDueState(task.due, task.status)] : `GUT ${task.scoreGut}`}</small>
                       </span>
                     </button>
                   )) : (
@@ -977,7 +967,7 @@ function App() {
 
                           <div className="kanban-meta">
                             <span>{task.responsible}</span>
-                            <span className={`kanban-due ${getDueState(task)}`}>{dueStateLabels[getDueState(task)]}</span>
+                            <span className={`kanban-due ${getDueState(task.due, task.status)}`}>{dueStateLabels[getDueState(task.due, task.status)]}</span>
                           </div>
                         </article>
                       ))}
@@ -1082,9 +1072,9 @@ function App() {
 
                       <div className="task-priority">
                         <span className={`priority-label ${task.scoreGut >= 80 ? 'critical' : task.scoreGut >= 50 ? 'high' : 'low'}`}>GUT {task.scoreGut}</span>
-                        <span className={`due-date ${getDueState(task)}`}>
+                        <span className={`due-date ${getDueState(task.due, task.status)}`}>
                           <span>{task.due}</span>
-                          <small>{dueStateLabels[getDueState(task)]}</small>
+                          <small>{dueStateLabels[getDueState(task.due, task.status)]}</small>
                         </span>
                       </div>
 
@@ -1336,8 +1326,9 @@ function App() {
                 <label className="field">
                   <span>Prazo</span>
                   <input
-                    value={editingTask.due}
-                    onChange={(event) => setEditingTask({ ...editingTask, due: event.target.value })}
+                    type="date"
+                    value={dueToInputValue(editingTask.due)}
+                    onChange={(event) => setEditingTask({ ...editingTask, due: inputValueToDue(event.target.value) })}
                   />
                 </label>
 
