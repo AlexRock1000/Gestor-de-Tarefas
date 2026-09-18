@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -17,6 +17,7 @@ import {
   Sparkles,
   SunMedium,
   Target,
+  Upload,
   X,
 } from 'lucide-react'
 
@@ -44,6 +45,15 @@ type Task = {
   checklist: ChecklistItem[]
   promptIa: string
   observacoes: string
+}
+
+type Activity = {
+  id: number
+  actor: string
+  tone: 'teal' | 'amber' | 'coral'
+  message: string
+  taskTitle: string
+  time: string
 }
 
 type DeadlineFilter = 'Todos' | 'Em aberto' | 'Concluídas'
@@ -190,6 +200,7 @@ const initialTasks: Task[] = [
 
 const computeScore = (gravidade: number, urgencia: number, tendencia: number) => gravidade * urgencia * tendencia
 const storageKey = 'gestor-de-tarefas-v1'
+const activityStorageKey = `${storageKey}-activity`
 const monthIndexes: Record<string, number> = {
   jan: 0,
   fev: 1,
@@ -229,6 +240,12 @@ const dueStateLabels: Record<DueState, string> = {
   completed: 'Concluída',
   undated: 'Sem prazo',
 }
+
+const initialActivities: Activity[] = [
+  { id: 1, actor: 'Daniel', tone: 'teal', message: 'concluiu', taskTitle: 'Centralizar POPs', time: 'Há 24 min' },
+  { id: 2, actor: 'Ana', tone: 'amber', message: 'atualizou a prioridade de', taskTitle: 'Revisar contratos', time: 'Há 1 h' },
+  { id: 3, actor: 'Lucas', tone: 'coral', message: 'adicionou um item ao checklist', taskTitle: '', time: 'Há 2 h' },
+]
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
@@ -270,10 +287,25 @@ function App() {
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [activities, setActivities] = useState<Activity[]>(() => {
+    if (typeof window === 'undefined') return initialActivities
+    const stored = window.localStorage.getItem(activityStorageKey)
+    if (!stored) return initialActivities
+    try {
+      const parsed = JSON.parse(stored) as Activity[]
+      return Array.isArray(parsed) && parsed.length ? parsed : initialActivities
+    } catch {
+      return initialActivities
+    }
+  })
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(tasks))
   }, [tasks])
+
+  useEffect(() => {
+    window.localStorage.setItem(activityStorageKey, JSON.stringify(activities))
+  }, [activities])
 
   useEffect(() => {
     if (selectedTaskId !== null) {
@@ -347,7 +379,14 @@ function App() {
   }
 
   const updateStatus = (id: number, status: Status) => {
+    const task = tasks.find((item) => item.id === id)
     updateTask(id, { status, due: status === 'Concluído' ? 'Concluída' : 'Em revisão' })
+    if (task && task.status !== status) {
+      setActivities((current) => [
+        { id: Date.now(), actor: 'Daniel', tone: (status === 'Concluído' ? 'teal' : 'amber') as Activity['tone'], message: 'moveu para', taskTitle: task.title, time: 'Agora' },
+        ...current,
+      ].slice(0, 12))
+    }
   }
 
   const handleKanbanDrop = (status: Status) => {
@@ -359,6 +398,7 @@ function App() {
   }
 
   const toggleChecklist = (taskId: number, itemIndex: number) => {
+    const task = tasks.find((item) => item.id === taskId)
     setTasks((current) =>
       current.map((task) => {
         if (task.id !== taskId) {
@@ -373,6 +413,12 @@ function App() {
         }
       }),
     )
+    if (task) {
+      setActivities((current) => [
+        { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'atualizou o checklist de', taskTitle: task.title, time: 'Agora' },
+        ...current,
+      ].slice(0, 12))
+    }
   }
 
   const addTask = () => {
@@ -397,6 +443,10 @@ function App() {
 
     setTasks((current) => [...current, newTask])
     setSelectedTaskId(newTask.id)
+    setActivities((current) => [
+      { id: Date.now(), actor: 'Daniel', tone: 'teal' as const, message: 'criou', taskTitle: newTask.title, time: 'Agora' },
+      ...current,
+    ].slice(0, 12))
   }
 
   const deleteTask = (taskId: number) => {
@@ -407,6 +457,13 @@ function App() {
       }
       return nextTasks
     })
+    const task = tasks.find((item) => item.id === taskId)
+    if (task) {
+      setActivities((current) => [
+        { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'removeu', taskTitle: task.title, time: 'Agora' },
+        ...current,
+      ].slice(0, 12))
+    }
   }
 
   const addChecklistItem = (taskId: number) => {
@@ -484,6 +541,48 @@ function App() {
     URL.revokeObjectURL(url)
   }
 
+  const importTasks = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    const content = await file.text()
+    const lines = content.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean)
+    if (lines.length < 2) return
+
+    const parseRow = (line: string) => line.split(';').map((value) => value.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
+    const importedTasks = lines.slice(1).map((line, index) => {
+      const [title, phaseValue, statusValue, responsible, due, gutValue] = parseRow(line)
+      const phase = phases.some((item) => item.name === phaseValue) ? phaseValue as Phase : 'Processos'
+      const status = statusOrder.includes(statusValue as Status) ? statusValue as Status : 'Pendente'
+      const scoreGut = Number(gutValue) || 27
+      return {
+        id: Date.now() + index,
+        title: title || 'Tarefa importada',
+        phase,
+        status,
+        due: due || 'Sem prazo',
+        createdAt: 'Importada',
+        responsible: responsible || 'Não atribuída',
+        gravidade: 3,
+        urgencia: 3,
+        tendencia: 3,
+        scoreGut,
+        tag: 'Importada',
+        checklist: [{ label: 'Definir próximo passo', done: false }],
+        promptIa: 'Estruture os próximos passos práticos para esta tarefa, considerando prioridade, risco e prazo.',
+        observacoes: 'Tarefa importada via CSV.',
+      } satisfies Task
+    }).filter((task) => task.title.trim())
+
+    if (!importedTasks.length) return
+    setTasks((current) => [...current, ...importedTasks])
+    setActivities((current) => [
+      { id: Date.now(), actor: 'Daniel', tone: 'teal' as const, message: 'importou', taskTitle: `${importedTasks.length} tarefas via CSV`, time: 'Agora' },
+      ...current,
+    ].slice(0, 12))
+  }
+
   const saveEditedTask = () => {
     if (!editingTask) {
       return
@@ -506,6 +605,10 @@ function App() {
     )
     setSelectedTaskId(editingTask.id)
     setEditingTask(null)
+    setActivities((current) => [
+      { id: Date.now(), actor: 'Daniel', tone: 'amber' as const, message: 'editou', taskTitle: editingTask.title, time: 'Agora' },
+      ...current,
+    ].slice(0, 12))
   }
 
   const phaseStats = phases.map((phase) => {
@@ -554,6 +657,23 @@ function App() {
       return stateWeight(getDueState(b)) - stateWeight(getDueState(a)) || b.scoreGut - a.scoreGut
     })
   const alertCount = alertTasks.length
+  const hasActiveFilters = Boolean(
+    search ||
+    activePhase !== 'Todas' ||
+    statusFilter !== 'Todos' ||
+    responsibleFilter !== 'Todos' ||
+    deadlineFilter !== 'Todos' ||
+    gutFilter !== 'Todos',
+  )
+
+  const clearFilters = () => {
+    setSearch('')
+    setActivePhase('Todas')
+    setStatusFilter('Todos')
+    setResponsibleFilter('Todos')
+    setDeadlineFilter('Todos')
+    setGutFilter('Todos')
+  }
 
   return (
     <div className={`app-shell ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
@@ -581,7 +701,7 @@ function App() {
 
           <p className="nav-label second">Organização</p>
           <button className="nav-item"><FileText size={17} /> Documentos</button>
-          <button className="nav-item"><Clock3 size={17} /> Histórico</button>
+          <button className={activeView === 'Histórico' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Histórico')}><Clock3 size={17} /> Histórico</button>
         </nav>
 
         <div className="sidebar-bottom">
@@ -719,7 +839,11 @@ function App() {
                   <h2>Progresso por fase</h2>
                   <p>Uma leitura rápida do avanço operacional.</p>
                 </div>
-                <button className="text-button" onClick={exportTasks}>Exportar CSV <Download size={15} /></button>
+                <div className="report-actions">
+                  <label className="text-button" htmlFor="task-import"><Upload size={15} /> Importar CSV</label>
+                  <input id="task-import" className="file-input" type="file" accept=".csv,text/csv" onChange={importTasks} />
+                  <button className="text-button" onClick={exportTasks}>Exportar CSV <Download size={15} /></button>
+                </div>
               </div>
 
               <section className="phase-grid">
@@ -778,7 +902,30 @@ function App() {
             </>
           )}
 
-          {activeView === 'Quadro' ? (
+          {activeView === 'Histórico' ? (
+            <section className="history-view">
+              <div className="history-header">
+                <div>
+                  <p className="eyebrow">REGISTRO DE OPERAÇÕES</p>
+                  <h1>Histórico</h1>
+                  <p>Veja as últimas movimentações feitas no plano de ação.</p>
+                </div>
+                <span className="history-count">{activities.length} eventos</span>
+              </div>
+
+              <div className="history-list">
+                {activities.map((activity) => (
+                  <article className="history-item" key={activity.id}>
+                    <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
+                    <div className="history-item-copy">
+                      <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
+                      <span>{activity.time}</span>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+          ) : activeView === 'Quadro' ? (
             <section className="kanban-view">
               <div className="kanban-header">
                 <div>
@@ -891,6 +1038,11 @@ function App() {
                         </select>
                       </label>
                     </div>
+
+                    <div className="filter-summary">
+                      <span>{visibleTasks.length} de {tasks.length} tarefas</span>
+                      {hasActiveFilters && <button onClick={clearFilters}>Limpar filtros</button>}
+                    </div>
                   </div>
                 </div>
 
@@ -973,18 +1125,16 @@ function App() {
                     <button className="icon-button"><MoreHorizontal size={17} /></button>
                   </div>
 
-                  <div className="activity-item">
-                    <div className="activity-avatar teal">DR</div>
-                    <p><strong>Daniel</strong> concluiu <b>Centralizar POPs</b><small>Há 24 min</small></p>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-avatar amber">AM</div>
-                    <p><strong>Ana</strong> atualizou a prioridade de <b>Revisar contratos</b><small>Há 1 h</small></p>
-                  </div>
-                  <div className="activity-item">
-                    <div className="activity-avatar coral">LC</div>
-                    <p><strong>Lucas</strong> adicionou um item ao checklist<small>Há 2 h</small></p>
-                  </div>
+                  {activities.slice(0, 5).map((activity) => (
+                    <div className="activity-item" key={activity.id}>
+                      <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
+                      <p>
+                        <strong>{activity.actor}</strong> {activity.message}{' '}
+                        {activity.taskTitle && <b>{activity.taskTitle}</b>}
+                        <small>{activity.time}</small>
+                      </p>
+                    </div>
+                  ))}
                 </section>
 
                 <section className="prompt-card">
