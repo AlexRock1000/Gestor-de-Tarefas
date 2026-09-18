@@ -6,6 +6,7 @@ import {
   ChevronDown,
   Clipboard,
   Clock3,
+  Download,
   FileText,
   LayoutDashboard,
   ListChecks,
@@ -33,6 +34,8 @@ type Task = {
   phase: Phase
   status: Status
   due: string
+  createdAt: string
+  responsible: string
   gravidade: number
   urgencia: number
   tendencia: number
@@ -42,6 +45,10 @@ type Task = {
   promptIa: string
   observacoes: string
 }
+
+type DeadlineFilter = 'Todos' | 'Em aberto' | 'Concluídas'
+type GutFilter = 'Todos' | 'Críticas (80+)' | 'Altas (50-79)' | 'Baixas (até 49)'
+type DueState = 'overdue' | 'today' | 'upcoming' | 'completed' | 'undated'
 
 const phases: { name: Phase; tone: string; accent: string }[] = [
   { name: 'Estoque', tone: 'teal', accent: '#17847c' },
@@ -59,6 +66,8 @@ const initialTasks: Task[] = [
     phase: 'Estoque',
     status: 'Em Andamento',
     due: 'Hoje',
+    createdAt: '12 set',
+    responsible: 'Daniel Rocha',
     gravidade: 5,
     urgencia: 4,
     tendencia: 5,
@@ -78,6 +87,8 @@ const initialTasks: Task[] = [
     phase: 'Estoque',
     status: 'Pendente',
     due: '18 set',
+    createdAt: '14 set',
+    responsible: 'Ana Maria',
     gravidade: 4,
     urgencia: 3,
     tendencia: 5,
@@ -97,6 +108,8 @@ const initialTasks: Task[] = [
     phase: 'Documentação',
     status: 'Em Andamento',
     due: '20 set',
+    createdAt: '10 set',
+    responsible: 'Lucas Costa',
     gravidade: 4,
     urgencia: 4,
     tendencia: 4,
@@ -116,6 +129,8 @@ const initialTasks: Task[] = [
     phase: 'Documentação',
     status: 'Concluído',
     due: 'Concluída',
+    createdAt: '08 set',
+    responsible: 'Fernanda Silva',
     gravidade: 3,
     urgencia: 2,
     tendencia: 5,
@@ -135,6 +150,8 @@ const initialTasks: Task[] = [
     phase: 'Processos',
     status: 'Pendente',
     due: '24 set',
+    createdAt: '16 set',
+    responsible: 'Bruno Souza',
     gravidade: 5,
     urgencia: 4,
     tendencia: 5,
@@ -154,6 +171,8 @@ const initialTasks: Task[] = [
     phase: 'Automações',
     status: 'Em Andamento',
     due: '26 set',
+    createdAt: '15 set',
+    responsible: 'Miguel Nunes',
     gravidade: 5,
     urgencia: 4,
     tendencia: 3,
@@ -171,6 +190,45 @@ const initialTasks: Task[] = [
 
 const computeScore = (gravidade: number, urgencia: number, tendencia: number) => gravidade * urgencia * tendencia
 const storageKey = 'gestor-de-tarefas-v1'
+const monthIndexes: Record<string, number> = {
+  jan: 0,
+  fev: 1,
+  mar: 2,
+  abr: 3,
+  mai: 4,
+  jun: 5,
+  jul: 6,
+  ago: 7,
+  set: 8,
+  out: 9,
+  nov: 10,
+  dez: 11,
+}
+
+const getDueState = (task: Task): DueState => {
+  if (task.status === 'Concluído' || task.due === 'Concluída') return 'completed'
+  if (task.due === 'Hoje') return 'today'
+
+  const match = task.due.toLowerCase().match(/^(\d{1,2})\s+([a-zç]+)$/)
+  if (!match) return 'undated'
+
+  const month = monthIndexes[match[2].slice(0, 3)]
+  if (month === undefined) return 'undated'
+
+  const dueDate = new Date(new Date().getFullYear(), month, Number(match[1]))
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  dueDate.setHours(0, 0, 0, 0)
+  return dueDate < today ? 'overdue' : 'upcoming'
+}
+
+const dueStateLabels: Record<DueState, string> = {
+  overdue: 'Atrasada',
+  today: 'Vence hoje',
+  upcoming: 'No prazo',
+  completed: 'Concluída',
+  undated: 'Sem prazo',
+}
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
@@ -194,6 +252,9 @@ function App() {
   })
   const [activePhase, setActivePhase] = useState<'Todas' | Phase>('Todas')
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos')
+  const [responsibleFilter, setResponsibleFilter] = useState('Todos')
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('Todos')
+  const [gutFilter, setGutFilter] = useState<GutFilter>('Todos')
   const [activeView, setActiveView] = useState('Visão geral')
   const [search, setSearch] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
@@ -206,6 +267,9 @@ function App() {
   })
   const [copiedTaskId, setCopiedTaskId] = useState<number | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
+  const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null)
+  const [notificationsOpen, setNotificationsOpen] = useState(false)
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify(tasks))
@@ -225,16 +289,31 @@ function App() {
 
   const selectedTask = tasks.find((task) => task.id === selectedTaskId) ?? null
 
+  const responsibleOptions = useMemo(
+    () => [...new Set(tasks.map((task) => task.responsible))].sort((a, b) => a.localeCompare(b)),
+    [tasks],
+  )
+
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
       const phaseMatches = activePhase === 'Todas' || task.phase === activePhase
       const statusMatches = statusFilter === 'Todos' || task.status === statusFilter
       const titleMatches = task.title.toLowerCase().includes(search.toLowerCase())
-      return phaseMatches && statusMatches && titleMatches
+      const responsibleMatches = responsibleFilter === 'Todos' || task.responsible === responsibleFilter
+      const deadlineMatches =
+        deadlineFilter === 'Todos' ||
+        (deadlineFilter === 'Concluídas' && task.status === 'Concluído') ||
+        (deadlineFilter === 'Em aberto' && task.status !== 'Concluído')
+      const gutMatches =
+        gutFilter === 'Todos' ||
+        (gutFilter === 'Críticas (80+)' && task.scoreGut >= 80) ||
+        (gutFilter === 'Altas (50-79)' && task.scoreGut >= 50 && task.scoreGut < 80) ||
+        (gutFilter === 'Baixas (até 49)' && task.scoreGut < 50)
+      return phaseMatches && statusMatches && titleMatches && responsibleMatches && deadlineMatches && gutMatches
     })
 
     return [...filtered].sort((a, b) => b.scoreGut - a.scoreGut)
-  }, [activePhase, search, statusFilter, tasks])
+  }, [activePhase, deadlineFilter, gutFilter, responsibleFilter, search, statusFilter, tasks])
 
   const totalProgress = tasks.length
     ? Math.round(
@@ -271,6 +350,14 @@ function App() {
     updateTask(id, { status, due: status === 'Concluído' ? 'Concluída' : 'Em revisão' })
   }
 
+  const handleKanbanDrop = (status: Status) => {
+    if (draggedTaskId !== null) {
+      updateStatus(draggedTaskId, status)
+    }
+    setDraggedTaskId(null)
+    setDragOverStatus(null)
+  }
+
   const toggleChecklist = (taskId: number, itemIndex: number) => {
     setTasks((current) =>
       current.map((task) => {
@@ -296,6 +383,8 @@ function App() {
       phase: nextPhase,
       status: 'Pendente',
       due: '30 set',
+      createdAt: 'Hoje',
+      responsible: 'Não atribuída',
       gravidade: 3,
       urgencia: 3,
       tendencia: 3,
@@ -373,6 +462,28 @@ function App() {
     window.setTimeout(() => setCopiedTaskId(null), 1800)
   }
 
+  const exportTasks = () => {
+    const escapeCsv = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
+    const headers = ['Tarefa', 'Fase', 'Status', 'Responsável', 'Prazo', 'Prioridade GUT', 'Estado do prazo']
+    const rows = visibleTasks.map((task) => [
+      task.title,
+      task.phase,
+      task.status,
+      task.responsible,
+      task.due,
+      task.scoreGut,
+      dueStateLabels[getDueState(task)],
+    ])
+    const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(';')).join('\n')
+    const blob = new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `orbit-tarefas-${new Date().toISOString().slice(0, 10)}.csv`
+    link.click()
+    URL.revokeObjectURL(url)
+  }
+
   const saveEditedTask = () => {
     if (!editingTask) {
       return
@@ -405,8 +516,44 @@ function App() {
     return { ...phase, percent, completed, total: phaseTasks.length }
   })
 
+  const statusStats = statusOrder.map((status) => ({
+    status,
+    total: tasks.filter((task) => task.status === status).length,
+  }))
+  const maxStatusTotal = Math.max(...statusStats.map((item) => item.total), 1)
+  const responsibleStats = [...new Set(tasks.map((task) => task.responsible))]
+    .map((responsible) => ({
+      responsible,
+      total: tasks.filter((task) => task.responsible === responsible).length,
+    }))
+    .sort((a, b) => b.total - a.total || a.responsible.localeCompare(b.responsible))
+    .slice(0, 4)
+  const maxResponsibleTotal = Math.max(...responsibleStats.map((item) => item.total), 1)
+
+  const kanbanColumns = statusOrder.map((status) => ({
+    status,
+    tasks: visibleTasks.filter((task) => task.status === status),
+  }))
+
+  const handleNavClick = (view: string) => {
+    setActiveView(view)
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+  }
+
+  const isOverview = activeView === 'Visão geral'
+
   const activeTasksCount = tasks.filter((task) => task.status !== 'Concluído').length
   const highPriorityCount = tasks.filter((task) => task.scoreGut >= 80 && task.status !== 'Concluído').length
+  const alertTasks = tasks
+    .filter((task) => task.status !== 'Concluído')
+    .filter((task) => getDueState(task) === 'overdue' || getDueState(task) === 'today' || task.scoreGut >= 80)
+    .sort((a, b) => {
+      const stateWeight = (state: DueState) => state === 'overdue' ? 3 : state === 'today' ? 2 : 1
+      return stateWeight(getDueState(b)) - stateWeight(getDueState(a)) || b.scoreGut - a.scoreGut
+    })
+  const alertCount = alertTasks.length
 
   return (
     <div className={`app-shell ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
@@ -427,10 +574,10 @@ function App() {
 
         <nav className="main-nav">
           <p className="nav-label">Workspace</p>
-          <button className={activeView === 'Visão geral' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Visão geral')}><LayoutDashboard size={17} /> Visão geral</button>
-          <button className={activeView === 'Quadro' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Quadro')}><Target size={17} /> Quadro Kanban <span className="nav-count">{tasks.length}</span></button>
-          <button className={activeView === 'Checklists' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Checklists')}><ListChecks size={17} /> Checklists</button>
-          <button className={activeView === 'Prompts IA' ? 'nav-item active' : 'nav-item'} onClick={() => setActiveView('Prompts IA')}><Sparkles size={17} /> Prompts IA <span className="new-pill">novo</span></button>
+          <button className={activeView === 'Visão geral' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Visão geral')}><LayoutDashboard size={17} /> Visão geral</button>
+          <button className={activeView === 'Quadro' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Quadro')}><Target size={17} /> Quadro Kanban <span className="nav-count">{tasks.length}</span></button>
+          <button className={activeView === 'Checklists' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Checklists')}><ListChecks size={17} /> Checklists</button>
+          <button className={activeView === 'Prompts IA' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Prompts IA')}><Sparkles size={17} /> Prompts IA <span className="new-pill">novo</span></button>
 
           <p className="nav-label second">Organização</p>
           <button className="nav-item"><FileText size={17} /> Documentos</button>
@@ -480,205 +627,387 @@ function App() {
               {theme === 'dark' ? <SunMedium size={15} /> : <MoonStar size={15} />}
               <span>{theme === 'dark' ? 'Claro' : 'Escuro'}</span>
             </button>
-            <button className="icon-button" aria-label="Notificações"><Bell size={18} /><i /></button>
+            <div className="notification-wrap">
+              <button
+                className="icon-button"
+                aria-label="Notificações"
+                aria-expanded={notificationsOpen}
+                onClick={() => setNotificationsOpen((current) => !current)}
+              >
+                <Bell size={18} />
+                {alertCount > 0 && <i />}
+              </button>
+
+              {notificationsOpen && (
+                <div className="notification-panel">
+                  <div className="notification-heading">
+                    <div>
+                      <strong>Alertas operacionais</strong>
+                      <span>{alertCount ? `${alertCount} tarefa${alertCount === 1 ? '' : 's'} requer atenção` : 'Tudo sob controle'}</span>
+                    </div>
+                    <Bell size={16} />
+                  </div>
+
+                  {alertTasks.length ? alertTasks.slice(0, 5).map((task) => (
+                    <button
+                      className="notification-item"
+                      key={task.id}
+                      onClick={() => {
+                        setSelectedTaskId(task.id)
+                        setNotificationsOpen(false)
+                      }}
+                    >
+                      <span className={`notification-dot ${getDueState(task)}`} />
+                      <span>
+                        <strong>{task.title}</strong>
+                        <small>{getDueState(task) === 'overdue' || getDueState(task) === 'today' ? dueStateLabels[getDueState(task)] : `GUT ${task.scoreGut}`}</small>
+                      </span>
+                    </button>
+                  )) : (
+                    <p className="notification-empty">Nenhuma tarefa crítica no momento.</p>
+                  )}
+                </div>
+              )}
+            </div>
             <button className="avatar-button">DR</button>
           </div>
         </header>
 
         <div className="content-wrap">
-          <section className="hero-row">
-            <div>
-              <p className="eyebrow">QUINTA-FEIRA, 17 DE SETEMBRO</p>
-              <h1>Bom dia, Daniel <span>✦</span></h1>
-              <p className="hero-subtitle">Aqui está o pulso da sua operação hoje.</p>
-            </div>
-            <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
-          </section>
-
-          <section className="metric-grid">
-            <div className="metric-card dark">
-              <div className="metric-top"><span>Progresso geral</span><ArrowUpRight size={17} /></div>
-              <strong>{totalProgress}%</strong>
-              <div className="metric-foot">
-                <div className="progress-track light"><span style={{ width: `${totalProgress}%` }} /></div>
-                <span>+8,4% <small>esta semana</small></span>
-              </div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-top"><span>Tarefas ativas</span><Target size={17} /></div>
-              <strong>{activeTasksCount}</strong>
-              <div className="metric-caption">de {tasks.length} tarefas no plano</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-top"><span>Alta prioridade</span><span className="priority-dot" /></div>
-              <strong>{highPriorityCount}</strong>
-              <div className="metric-caption">requerem atenção</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-top"><span>Em dia</span><Check size={17} /></div>
-              <strong>{tasks.length ? Math.max(0, 100 - Math.round((highPriorityCount / tasks.length) * 100)) : 0}%</strong>
-              <div className="metric-caption">tarefas dentro do calendário</div>
-            </div>
-          </section>
-
-          <div className="section-heading">
-            <div>
-              <h2>Progresso por fase</h2>
-              <p>Uma leitura rápida do avanço operacional.</p>
-            </div>
-            <button className="text-button">Ver relatório <ArrowUpRight size={15} /></button>
-          </div>
-
-          <section className="phase-grid">
-            {phaseStats.map((phase) => (
-              <button className="phase-card" key={phase.name} onClick={() => setActivePhase(phase.name)}>
-                <div className="phase-card-head">
-                  <span className={`phase-icon ${phase.tone}`}><Target size={18} /></span>
-                  <span className="phase-arrow"><ArrowUpRight size={16} /></span>
-                </div>
-                <h3>{phase.name}</h3>
-                <div className="phase-meta">
-                  <span>{phase.completed} de {phase.total} concluídas</span>
-                  <b>{phase.percent}%</b>
-                </div>
-                <div className="progress-track"><span style={{ width: `${phase.percent}%`, background: phase.accent }} /></div>
-              </button>
-            ))}
-          </section>
-
-          <div className="workspace-grid">
-            <section className="tasks-panel">
-              <div className="panel-header">
+          {isOverview && (
+            <>
+              <section className="hero-row">
                 <div>
-                  <h2>Minhas tarefas</h2>
-                  <p>Prioridades para manter o plano em movimento.</p>
+                  <p className="eyebrow">QUINTA-FEIRA, 17 DE SETEMBRO</p>
+                  <h1>Bom dia, Daniel <span>✦</span></h1>
+                  <p className="hero-subtitle">Aqui está o pulso da sua operação hoje.</p>
+                </div>
+                <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
+              </section>
+
+              <section className="metric-grid">
+                <div className="metric-card dark">
+                  <div className="metric-top"><span>Progresso geral</span><ArrowUpRight size={17} /></div>
+                  <strong>{totalProgress}%</strong>
+                  <div className="metric-foot">
+                    <div className="progress-track light"><span style={{ width: `${totalProgress}%` }} /></div>
+                    <span>+8,4% <small>esta semana</small></span>
+                  </div>
                 </div>
 
-                <div className="filter-group">
-                  <div className="filter-tabs">
-                    <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas</button>
-                    {phases.map((phase) => (
-                      <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
-                    ))}
-                  </div>
+                <div className="metric-card">
+                  <div className="metric-top"><span>Tarefas ativas</span><Target size={17} /></div>
+                  <strong>{activeTasksCount}</strong>
+                  <div className="metric-caption">de {tasks.length} tarefas no plano</div>
+                </div>
 
-                  <div className="status-tabs">
-                    <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos</button>
-                    {statusOrder.map((status) => (
-                      <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                <div className="metric-card">
+                  <div className="metric-top"><span>Alta prioridade</span><span className="priority-dot" /></div>
+                  <strong>{highPriorityCount}</strong>
+                  <div className="metric-caption">requerem atenção</div>
+                </div>
+
+                <div className="metric-card">
+                  <div className="metric-top"><span>Em dia</span><Check size={17} /></div>
+                  <strong>{tasks.length ? Math.max(0, 100 - Math.round((highPriorityCount / tasks.length) * 100)) : 0}%</strong>
+                  <div className="metric-caption">tarefas dentro do calendário</div>
+                </div>
+              </section>
+
+              <div className="section-heading">
+                <div>
+                  <h2>Progresso por fase</h2>
+                  <p>Uma leitura rápida do avanço operacional.</p>
+                </div>
+                <button className="text-button" onClick={exportTasks}>Exportar CSV <Download size={15} /></button>
+              </div>
+
+              <section className="phase-grid">
+                {phaseStats.map((phase) => (
+                  <button className="phase-card" key={phase.name} onClick={() => setActivePhase(phase.name)}>
+                    <div className="phase-card-head">
+                      <span className={`phase-icon ${phase.tone}`}><Target size={18} /></span>
+                      <span className="phase-arrow"><ArrowUpRight size={16} /></span>
+                    </div>
+                    <h3>{phase.name}</h3>
+                    <div className="phase-meta">
+                      <span>{phase.completed} de {phase.total} concluídas</span>
+                      <b>{phase.percent}%</b>
+                    </div>
+                    <div className="progress-track"><span style={{ width: `${phase.percent}%`, background: phase.accent }} /></div>
+                  </button>
+                ))}
+              </section>
+
+              <section className="report-grid">
+                <article className="report-card">
+                  <div className="report-card-heading">
+                    <div>
+                      <h2>Status do plano</h2>
+                      <p>Distribuição atual das tarefas.</p>
+                    </div>
+                    <span>{tasks.length} total</span>
+                  </div>
+                  <div className="report-bars">
+                    {statusStats.map((item) => (
+                      <div className="report-bar-row" key={item.status}>
+                        <div className="report-bar-label"><span>{item.status}</span><strong>{item.total}</strong></div>
+                        <div className="report-bar-track"><span className={`status-bar ${item.status.toLowerCase().replace(' ', '-')}`} style={{ width: `${(item.total / maxStatusTotal) * 100}%` }} /></div>
+                      </div>
                     ))}
                   </div>
+                </article>
+
+                <article className="report-card">
+                  <div className="report-card-heading">
+                    <div>
+                      <h2>Carga por responsável</h2>
+                      <p>Quem concentra mais frentes.</p>
+                    </div>
+                  </div>
+                  <div className="report-bars">
+                    {responsibleStats.map((item) => (
+                      <div className="report-bar-row" key={item.responsible}>
+                        <div className="report-bar-label"><span>{item.responsible}</span><strong>{item.total}</strong></div>
+                        <div className="report-bar-track"><span className="responsible-bar" style={{ width: `${(item.total / maxResponsibleTotal) * 100}%` }} /></div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              </section>
+            </>
+          )}
+
+          {activeView === 'Quadro' ? (
+            <section className="kanban-view">
+              <div className="kanban-header">
+                <div>
+                  <h2>Quadro operacional</h2>
+                  <p>Acompanhe o fluxo por etapa de execução.</p>
                 </div>
               </div>
 
-              <div className="task-list">
-                {!visibleTasks.length && (
-                  <div className="empty-state">
-                    <strong>Nenhuma tarefa encontrada</strong>
-                    <span>Ajuste o filtro ou crie uma nova tarefa.</span>
+              <div className="kanban-board">
+                {kanbanColumns.map((column) => (
+                  <div
+                    className={`kanban-column ${dragOverStatus === column.status ? 'drag-over' : ''}`}
+                    key={column.status}
+                    onDragOver={(event) => {
+                      event.preventDefault()
+                      setDragOverStatus(column.status)
+                    }}
+                    onDragLeave={() => setDragOverStatus(null)}
+                    onDrop={() => handleKanbanDrop(column.status)}
+                  >
+                    <div className="kanban-column-header">
+                      <span>{column.status}</span>
+                      <strong>{column.tasks.length}</strong>
+                    </div>
+
+                    <div className="kanban-column-body">
+                      {!column.tasks.length && (
+                        <div className="kanban-empty">Sem tarefas</div>
+                      )}
+
+                      {column.tasks.map((task) => (
+                        <article
+                          className={`kanban-card ${draggedTaskId === task.id ? 'dragging' : ''}`}
+                          key={task.id}
+                          draggable
+                          onDragStart={() => setDraggedTaskId(task.id)}
+                          onDragEnd={() => {
+                            setDraggedTaskId(null)
+                            setDragOverStatus(null)
+                          }}
+                          onClick={() => setSelectedTaskId(task.id)}
+                        >
+                          <div className="kanban-card-top">
+                            <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
+                            <span className={`priority-label ${task.scoreGut >= 80 ? 'critical' : task.scoreGut >= 50 ? 'high' : 'low'}`}>GUT {task.scoreGut}</span>
+                          </div>
+
+                          <strong>{task.title}</strong>
+
+                          <div className="kanban-meta">
+                            <span>{task.responsible}</span>
+                            <span className={`kanban-due ${getDueState(task)}`}>{dueStateLabels[getDueState(task)]}</span>
+                          </div>
+                        </article>
+                      ))}
+                    </div>
                   </div>
-                )}
-
-                {visibleTasks.map((task) => (
-                  <article className="task-row" key={task.id} onClick={() => setSelectedTaskId(task.id)}>
-                    <div
-                      className={`task-status ${task.status === 'Concluído' ? 'done' : task.status === 'Em Andamento' ? 'progress' : ''}`}
-                      onClick={(event) => {
-                        event.stopPropagation()
-                        const nextStatus = task.status === 'Concluído' ? 'Pendente' : 'Concluído'
-                        updateStatus(task.id, nextStatus)
-                      }}
-                    >
-                      {task.status === 'Concluído' && <Check size={13} />}
-                    </div>
-
-                    <div className="task-info">
-                      <strong>{task.title}</strong>
-                      <div>
-                        <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
-                        <span className="task-label">{task.tag}</span>
-                      </div>
-                    </div>
-
-                    <div className="task-priority">
-                      <span className={`priority-label ${task.scoreGut >= 80 ? 'critical' : task.scoreGut >= 50 ? 'high' : 'low'}`}>GUT {task.scoreGut}</span>
-                      <span className="due-date">{task.due}</span>
-                    </div>
-
-                    <div className="task-actions">
-                      <button
-                        className="mini-action"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setEditingTask({ ...task })
-                        }}
-                        aria-label="Editar tarefa"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        className="mini-action"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void copyPrompt(task)
-                        }}
-                        aria-label="Copiar prompt"
-                      >
-                        {copiedTaskId === task.id ? <Check size={14} /> : <Clipboard size={14} />}
-                      </button>
-                    </div>
-                  </article>
                 ))}
               </div>
             </section>
-
-            <aside className="side-column">
-              <section className="prompt-card">
-                <div className="prompt-orbit"><Sparkles size={19} /></div>
-                <div className="prompt-copy">
-                  <span className="eyebrow">PROMPT HELPER</span>
-                  <h2>Destrave o próximo passo.</h2>
-                  <p>Use IA para transformar uma tarefa complexa em ações claras e rápidas.</p>
-                  <button
-                    className="prompt-button"
-                    onClick={() => {
-                      if (selectedTask) {
-                        void copyPrompt(selectedTask)
-                      }
-                    }}
-                  >
-                    {copiedTaskId === selectedTask?.id ? <><Check size={15} /> Copiado</> : <><Clipboard size={15} /> Copiar prompt</>}
-                  </button>
-                </div>
-              </section>
-
-              <section className="activity-card">
-                <div className="panel-header compact">
+          ) : (
+            <div className="workspace-grid">
+              <section className="tasks-panel">
+                <div className="panel-header">
                   <div>
-                    <h2>Atividade recente</h2>
-                    <p>Últimas atualizações do time.</p>
+                    <h2>Minhas tarefas</h2>
+                    <p>Prioridades para manter o plano em movimento.</p>
                   </div>
-                  <button className="icon-button"><MoreHorizontal size={17} /></button>
+
+                  <div className="filter-group">
+                    <div className="filter-tabs">
+                      <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas</button>
+                      {phases.map((phase) => (
+                        <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
+                      ))}
+                    </div>
+
+                    <div className="status-tabs">
+                      <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos</button>
+                      {statusOrder.map((status) => (
+                        <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                      ))}
+                    </div>
+
+                    <div className="advanced-filters">
+                      <label>
+                        Responsável
+                        <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
+                          <option value="Todos">Todos</option>
+                          {responsibleOptions.map((responsible) => (
+                            <option key={responsible} value={responsible}>{responsible}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <label>
+                        Prazo
+                        <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as DeadlineFilter)}>
+                          <option value="Todos">Todos</option>
+                          <option value="Em aberto">Em aberto</option>
+                          <option value="Concluídas">Concluídas</option>
+                        </select>
+                      </label>
+                      <label>
+                        Prioridade
+                        <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as GutFilter)}>
+                          <option value="Todos">Todas</option>
+                          <option value="Críticas (80+)">Críticas</option>
+                          <option value="Altas (50-79)">Altas</option>
+                          <option value="Baixas (até 49)">Baixas</option>
+                        </select>
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="activity-item">
-                  <div className="activity-avatar teal">DR</div>
-                  <p><strong>Daniel</strong> concluiu <b>Centralizar POPs</b><small>Há 24 min</small></p>
-                </div>
-                <div className="activity-item">
-                  <div className="activity-avatar amber">AM</div>
-                  <p><strong>Ana</strong> atualizou a prioridade de <b>Revisar contratos</b><small>Há 1 h</small></p>
-                </div>
-                <div className="activity-item">
-                  <div className="activity-avatar coral">LC</div>
-                  <p><strong>Lucas</strong> adicionou um item ao checklist<small>Há 2 h</small></p>
+                <div className="task-list">
+                  {!visibleTasks.length && (
+                    <div className="empty-state">
+                      <strong>Nenhuma tarefa encontrada</strong>
+                      <span>Ajuste o filtro ou crie uma nova tarefa.</span>
+                    </div>
+                  )}
+
+                  {visibleTasks.map((task) => (
+                    <article className="task-row" key={task.id} onClick={() => setSelectedTaskId(task.id)}>
+                      <div
+                        className={`task-status ${task.status === 'Concluído' ? 'done' : task.status === 'Em Andamento' ? 'progress' : ''}`}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          const nextStatus = task.status === 'Concluído' ? 'Pendente' : 'Concluído'
+                          updateStatus(task.id, nextStatus)
+                        }}
+                      >
+                        {task.status === 'Concluído' && <Check size={13} />}
+                      </div>
+
+                      <div className="task-info">
+                        <strong>{task.title}</strong>
+                        <div>
+                          <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
+                          <span className="task-label">{task.tag}</span>
+                        </div>
+                        <div className="task-meta">
+                          <span>{task.responsible}</span>
+                          <span>•</span>
+                          <span>{task.createdAt}</span>
+                        </div>
+                      </div>
+
+                      <div className="task-priority">
+                        <span className={`priority-label ${task.scoreGut >= 80 ? 'critical' : task.scoreGut >= 50 ? 'high' : 'low'}`}>GUT {task.scoreGut}</span>
+                        <span className={`due-date ${getDueState(task)}`}>
+                          <span>{task.due}</span>
+                          <small>{dueStateLabels[getDueState(task)]}</small>
+                        </span>
+                      </div>
+
+                      <div className="task-actions">
+                        <button
+                          className="mini-action"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            setEditingTask({ ...task })
+                          }}
+                          aria-label="Editar tarefa"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          className="mini-action"
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            void copyPrompt(task)
+                          }}
+                          aria-label="Copiar prompt"
+                        >
+                          {copiedTaskId === task.id ? <Check size={14} /> : <Clipboard size={14} />}
+                        </button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
               </section>
-            </aside>
+
+              <div className="stacked-panels">
+                <section className="activity-card">
+                  <div className="panel-header compact">
+                    <div>
+                      <h2>Atividade recente</h2>
+                      <p>Últimas atualizações do time.</p>
+                    </div>
+                    <button className="icon-button"><MoreHorizontal size={17} /></button>
+                  </div>
+
+                  <div className="activity-item">
+                    <div className="activity-avatar teal">DR</div>
+                    <p><strong>Daniel</strong> concluiu <b>Centralizar POPs</b><small>Há 24 min</small></p>
+                  </div>
+                  <div className="activity-item">
+                    <div className="activity-avatar amber">AM</div>
+                    <p><strong>Ana</strong> atualizou a prioridade de <b>Revisar contratos</b><small>Há 1 h</small></p>
+                  </div>
+                  <div className="activity-item">
+                    <div className="activity-avatar coral">LC</div>
+                    <p><strong>Lucas</strong> adicionou um item ao checklist<small>Há 2 h</small></p>
+                  </div>
+                </section>
+
+                <section className="prompt-card">
+                  <div className="prompt-orbit"><Sparkles size={19} /></div>
+                  <div className="prompt-copy">
+                    <span className="eyebrow">PROMPT HELPER</span>
+                    <h2>Destrave o próximo passo.</h2>
+                    <p>Use IA para transformar uma tarefa complexa em ações claras e rápidas.</p>
+                    <button
+                      className="prompt-button"
+                      onClick={() => {
+                        if (selectedTask) {
+                          void copyPrompt(selectedTask)
+                        }
+                      }}
+                    >
+                      {copiedTaskId === selectedTask?.id ? <><Check size={15} /> Copiado</> : <><Clipboard size={15} /> Copiar prompt</>}
+                    </button>
+                  </div>
+                </section>
+              </div>
           </div>
+          )}
         </div>
       </main>
 
@@ -704,6 +1033,17 @@ function App() {
                 <option key={status} value={status}>{status}</option>
               ))}
             </select>
+          </div>
+
+          <div className="drawer-meta-grid">
+            <div className="drawer-meta-card">
+              <span>Responsável</span>
+              <strong>{selectedTask.responsible}</strong>
+            </div>
+            <div className="drawer-meta-card">
+              <span>Criada em</span>
+              <strong>{selectedTask.createdAt}</strong>
+            </div>
           </div>
 
           <div className="drawer-section gut-panel">
@@ -848,6 +1188,24 @@ function App() {
                   <input
                     value={editingTask.due}
                     onChange={(event) => setEditingTask({ ...editingTask, due: event.target.value })}
+                  />
+                </label>
+
+                <label className="field">
+                  <span>Responsável</span>
+                  <input
+                    value={editingTask.responsible}
+                    onChange={(event) => setEditingTask({ ...editingTask, responsible: event.target.value })}
+                  />
+                </label>
+              </div>
+
+              <div className="modal-grid">
+                <label className="field">
+                  <span>Criada em</span>
+                  <input
+                    value={editingTask.createdAt}
+                    onChange={(event) => setEditingTask({ ...editingTask, createdAt: event.target.value })}
                   />
                 </label>
 
