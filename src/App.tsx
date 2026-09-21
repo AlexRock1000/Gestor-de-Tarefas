@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -36,12 +36,16 @@ import {
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
 
   const {
     activePhase,
     setActivePhase,
     statusFilter,
     setStatusFilter,
+    quickFilter,
+    setQuickFilter,
     responsibleFilter,
     setResponsibleFilter,
     deadlineFilter,
@@ -96,6 +100,39 @@ function App() {
     tasks,
     getDueState,
   } = useTaskBoard()
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      const isModifier = event.metaKey || event.ctrlKey
+      if (isModifier && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        searchInputRef.current?.focus()
+      }
+
+      if (event.key === 'Escape') {
+        if (notificationsOpen) {
+          setNotificationsOpen(false)
+        }
+        if (editingTask) {
+          setEditingTask(null)
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [editingTask, notificationsOpen])
+
+  useEffect(() => {
+    if (!toast) {
+      return undefined
+    }
+
+    const timer = window.setTimeout(() => setToast(null), 1800)
+    return () => window.clearTimeout(timer)
+  }, [toast])
+
+  const showToast = (message: string) => setToast(message)
 
   const renderOverview = () => (
     <>
@@ -296,6 +333,26 @@ function App() {
           </div>
 
           <div className="filter-group">
+            <div className="quick-actions-row">
+              {[
+                { label: 'Todos', value: 'Todos' },
+                { label: 'Hoje', value: 'Hoje' },
+                { label: 'Urgentes', value: 'Urgentes' },
+                { label: 'Concluídas', value: 'Concluídas' },
+              ].map((item) => (
+                <button
+                  key={item.value}
+                  className={quickFilter === item.value ? 'quick-action active' : 'quick-action'}
+                  onClick={() => setQuickFilter(item.value as 'Todos' | 'Hoje' | 'Urgentes' | 'Concluídas')}
+                >
+                  <span>{item.label}</span>
+                  {item.value === 'Hoje' && <strong>{tasks.filter((task) => getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
+                  {item.value === 'Urgentes' && <strong>{tasks.filter((task) => task.scoreGut >= 80 || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
+                  {item.value === 'Concluídas' && <strong>{tasks.filter((task) => task.status === 'Concluído').length}</strong>}
+                </button>
+              ))}
+            </div>
+
             <div className="filter-tabs">
               <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas</button>
               {phases.map((phase) => (
@@ -477,7 +534,12 @@ function App() {
           <div className="top-actions">
             <div className="search-box">
               <Search size={16} />
-              <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Buscar tarefa..." />
+              <input
+                ref={searchInputRef}
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar tarefa..."
+              />
               <kbd>⌘ K</kbd>
             </div>
             <button
@@ -538,6 +600,8 @@ function App() {
           {isOverview && renderOverview()}
           {activeView === 'Histórico' ? renderHistoryView() : activeView === 'Quadro' ? renderKanbanView() : renderTaskWorkspace()}
         </div>
+
+        {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
       </main>
 
       {selectedTask && (

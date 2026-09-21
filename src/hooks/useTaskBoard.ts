@@ -215,6 +215,7 @@ export function useTaskBoard() {
 
   const [activePhase, setActivePhase] = useState<'Todas' | Phase>('Todas')
   const [statusFilter, setStatusFilter] = useState<'Todos' | Status>('Todos')
+  const [quickFilter, setQuickFilter] = useState<'Todos' | 'Hoje' | 'Urgentes' | 'Concluídas'>('Todos')
   const [responsibleFilter, setResponsibleFilter] = useState('Todos')
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('Todos')
   const [gutFilter, setGutFilter] = useState<GutFilter>('Todos')
@@ -277,6 +278,7 @@ export function useTaskBoard() {
 
   const visibleTasks = useMemo(() => {
     const filtered = tasks.filter((task) => {
+      const dueState = getDueState(task.due, task.status)
       const phaseMatches = activePhase === 'Todas' || task.phase === activePhase
       const statusMatches = statusFilter === 'Todos' || task.status === statusFilter
       const titleMatches = task.title.toLowerCase().includes(search.toLowerCase())
@@ -290,11 +292,17 @@ export function useTaskBoard() {
         (gutFilter === 'Críticas (80+)' && task.scoreGut >= 80) ||
         (gutFilter === 'Altas (50-79)' && task.scoreGut >= 50 && task.scoreGut < 80) ||
         (gutFilter === 'Baixas (até 49)' && task.scoreGut < 50)
-      return phaseMatches && statusMatches && titleMatches && responsibleMatches && deadlineMatches && gutMatches
+      const quickMatches =
+        quickFilter === 'Todos' ||
+        (quickFilter === 'Hoje' && (dueState === 'today' || dueState === 'overdue')) ||
+        (quickFilter === 'Urgentes' && (task.scoreGut >= 80 || dueState === 'today' || dueState === 'overdue')) ||
+        (quickFilter === 'Concluídas' && task.status === 'Concluído')
+
+      return phaseMatches && statusMatches && titleMatches && responsibleMatches && deadlineMatches && gutMatches && quickMatches
     })
 
     return [...filtered].sort((a, b) => b.scoreGut - a.scoreGut)
-  }, [activePhase, deadlineFilter, gutFilter, responsibleFilter, search, statusFilter, tasks])
+  }, [activePhase, deadlineFilter, gutFilter, quickFilter, responsibleFilter, search, statusFilter, tasks])
 
   const totalProgress = tasks.length
     ? Math.round(
@@ -627,6 +635,7 @@ export function useTaskBoard() {
     search ||
     activePhase !== 'Todas' ||
     statusFilter !== 'Todos' ||
+    quickFilter !== 'Todos' ||
     responsibleFilter !== 'Todos' ||
     deadlineFilter !== 'Todos' ||
     gutFilter !== 'Todos',
@@ -636,6 +645,7 @@ export function useTaskBoard() {
     setSearch('')
     setActivePhase('Todas')
     setStatusFilter('Todos')
+    setQuickFilter('Todos')
     setResponsibleFilter('Todos')
     setDeadlineFilter('Todos')
     setGutFilter('Todos')
@@ -652,6 +662,8 @@ export function useTaskBoard() {
     setActivePhase,
     statusFilter,
     setStatusFilter,
+    quickFilter,
+    setQuickFilter,
     responsibleFilter,
     setResponsibleFilter,
     deadlineFilter,

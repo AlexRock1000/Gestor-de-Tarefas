@@ -28,6 +28,15 @@ export function TaskCard({
       className={`task-row ${selectedTaskId === task.id ? 'selected' : ''}`}
       key={task.id}
       onClick={() => onSelect(task.id)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onSelect(task.id)
+        }
+      }}
+      tabIndex={0}
+      role="button"
+      aria-label={`Abrir tarefa ${task.title}`}
     >
       <div
         className={`task-status ${task.status === 'Concluído' ? 'done' : task.status === 'Em Andamento' ? 'progress' : ''}`}

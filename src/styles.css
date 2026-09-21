@@ -340,6 +340,10 @@ textarea { resize: vertical; }
   font-size: 13px;
 }
 
+.search-box:focus-within {
+  border-bottom-color: var(--teal);
+}
+
 .search-box kbd {
   border: 1px solid #ddd9d1;
   padding: 2px 5px;
@@ -357,6 +361,19 @@ textarea { resize: vertical; }
   border: 0;
   color: #858b87;
   padding: 5px;
+}
+
+.icon-button:focus-visible,
+.avatar-button:focus-visible,
+.theme-toggle:focus-visible,
+.primary-button:focus-visible,
+.text-button:focus-visible,
+.quick-action:focus-visible,
+.filter-tabs button:focus-visible,
+.status-tabs button:focus-visible,
+.advanced-filters select:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 3px;
 }
 
 .icon-button i {
@@ -931,6 +948,46 @@ h2 {
   max-width: 560px;
 }
 
+.quick-actions-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.quick-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  background: #f5f5f2;
+  color: #5d665f;
+  border-radius: 999px;
+  padding: 7px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.quick-action strong {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #e8efe9;
+  color: var(--teal);
+  font-size: 10px;
+}
+
+.quick-action.active {
+  background: rgba(23, 132, 124, 0.1);
+  border-color: rgba(23, 132, 124, 0.4);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px rgba(23, 132, 124, 0.15);
+}
+
 .filter-tabs,
 .status-tabs {
   display: flex;
@@ -1016,6 +1073,21 @@ h2 {
 .filter-summary button:hover { text-decoration: underline; }
 
 .task-list { border-top: 1px solid var(--line); }
+
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  background: rgba(26, 36, 35, 0.94);
+  color: #f4faf8;
+  border: 1px solid rgba(217, 239, 189, 0.2);
+  border-radius: 999px;
+  padding: 10px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: 0 14px 28px rgba(12, 18, 17, 0.18);
+  z-index: 40;
+}
 
 .kanban-view {
   padding-top: 8px;
@@ -1160,9 +1232,19 @@ h2 {
   gap: 12px;
   border-bottom: 1px solid #efede8;
   cursor: pointer;
+  transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  outline: none;
 }
 .task-row:last-child { border-bottom: 0; }
-.task-row:hover { background: #f7f6f1; }
+.task-row:hover,
+.task-row:focus-visible {
+  background: #f7f6f1;
+  box-shadow: inset 0 0 0 1px rgba(23, 132, 124, 0.15);
+}
+.task-row.selected {
+  background: rgba(23, 132, 124, 0.05);
+  box-shadow: inset 3px 0 0 var(--teal), inset 0 0 0 1px rgba(23, 132, 124, 0.12);
+}
 
 .task-actions {
   display: flex;
@@ -1690,8 +1772,12 @@ h2 {
   .user-card > svg { display: none; }
   .user-card { justify-content: center; padding-top: 18px; }
   .topbar { height: 62px; }
-  .breadcrumb span:not(:last-child),
-  .search-box { display: none; }
+  .breadcrumb span:not(:last-child) { display: none; }
+  .top-actions { gap: 9px; }
+  .search-box { width: min(180px, 32vw); }
+  .search-box kbd { display: none; }
+  .theme-toggle { padding: 7px; }
+  .theme-toggle span { display: none; }
   .content-wrap { padding: 30px 17px 50px; }
   .hero-row { align-items: flex-start; gap: 20px; }
   .hero-row .primary-button { padding: 9px; font-size: 0; }
@@ -1704,14 +1790,22 @@ h2 {
   .report-grid { grid-template-columns: 1fr; margin-bottom: 30px; }
   .phase-card { padding: 14px; }
   .workspace-grid { grid-template-columns: 1fr; }
-  .filter-tabs { max-width: 180px; overflow: auto; }
+  .filter-tabs { max-width: none; overflow: auto; }
   .filter-tabs button { white-space: nowrap; }
   .task-priority { width: 65px; }
-  .detail-drawer { width: min(310px, 90vw); }
+  .detail-drawer { width: min(360px, 92vw); }
   .hero-row h1 { font-size: 26px; }
 }
 
 @media (max-width: 420px) {
+  .topbar { padding-left: 12px; padding-right: 12px; }
+  .content-wrap { padding-left: 12px; padding-right: 12px; }
+  .breadcrumb strong { font-size: 12px; }
+  .search-box { width: 128px; }
+  .search-box input { font-size: 12px; }
+  .top-actions { gap: 5px; }
+  .advanced-filters { grid-template-columns: 1fr; gap: 10px; }
+  .panel-header { padding-left: 14px; padding-right: 14px; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
   .metric-card.dark { grid-column: span 2; }
   .metric-top { font-size: 10px; }
@@ -1720,4 +1814,5 @@ h2 {
   .task-priority { width: 55px; }
   .priority-label { font-size: 10px; }
   .tag { font-size: 10px; }
+  .detail-drawer { width: 100%; padding: 20px 16px; }
 }
