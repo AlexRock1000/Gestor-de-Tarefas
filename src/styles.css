@@ -1111,7 +1111,7 @@ h2 {
 
 .kanban-card strong {
   display: block;
-  font-size: 15px;
+  font-size: 17px;
   line-height: 1.4;
   color: #edf3f1;
   margin-bottom: 12px;
@@ -1122,7 +1122,7 @@ h2 {
   justify-content: space-between;
   gap: 6px;
   color: #9aa7a2;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .kanban-due.overdue,
@@ -1196,7 +1196,7 @@ h2 {
   text-overflow: ellipsis;
   white-space: nowrap;
   color: #3a403e;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
   margin-bottom: 7px;
 }
@@ -1212,14 +1212,14 @@ h2 {
   gap: 6px;
   margin-top: 6px;
   color: #88928d;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .tag {
   display: inline-block;
   border-radius: 4px;
   padding: 4px 7px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
 }
 .tag.estoque { color: #17847c; background: #d8efeb; }
@@ -1227,13 +1227,13 @@ h2 {
 .tag.processos { color: #c75549; background: #f7dfda; }
 .tag.automações { color: #4d4c8d; background: #e8e5ff; }
 
-.task-label { color: #a5a8a1; font-size: 13px; }
+.task-label { color: #a5a8a1; font-size: 14px; }
 .task-priority { width: 120px; text-align: right; }
 .priority-label {
   display: inline-block;
   border-radius: 4px;
   padding: 5px 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: #8c8e86;
   background: #eeece6;
@@ -1245,7 +1245,7 @@ h2 {
 .due-date {
   display: block;
   color: #a0a39c;
-  font-size: 13px;
+  font-size: 14px;
   margin-top: 6px;
 }
 
@@ -1385,13 +1385,13 @@ h2 {
 }
 .drawer-top { display: flex; justify-content: space-between; align-items: center; }
 .detail-drawer h2 {
-  font-size: 26px;
+  font-size: 30px;
   line-height: 1.15;
   margin: 28px 0 10px;
 }
 .drawer-description {
   color: #929790;
-  font-size: 13px;
+  font-size: 15px;
   line-height: 1.5;
 }
 .drawer-status {
@@ -1402,7 +1402,7 @@ h2 {
   padding: 14px 0;
   border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 13px;
   color: #8e948d;
 }
 
@@ -1422,14 +1422,14 @@ h2 {
 
 .drawer-meta-card span {
   display: block;
-  font-size: 10px;
+  font-size: 11px;
   color: #7e857f;
   margin-bottom: 6px;
 }
 
 .drawer-meta-card strong {
   display: block;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--ink);
 }
 .drawer-status select {
@@ -1438,7 +1438,7 @@ h2 {
   border-radius: 4px;
   color: #46705f;
   font-weight: 600;
-  font-size: 10px;
+  font-size: 12px;
   padding: 7px;
   outline: none;
 }
@@ -1449,10 +1449,10 @@ h2 {
   margin-bottom: 15px;
 }
 .drawer-section-head h3 {
-  font: 600 15px 'Space Grotesk';
+  font: 600 17px 'Space Grotesk';
   margin: 0;
 }
-.drawer-section-head span { font-size: 12px; color: var(--teal); }
+.drawer-section-head span { font-size: 13px; color: var(--teal); }
 
 .drawer-actions {
   display: flex;
@@ -1467,7 +1467,7 @@ h2 {
   color: #2d3d3a;
   padding: 10px 12px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -1477,7 +1477,7 @@ h2 {
   color: #b7473b;
   padding: 10px 12px;
   border-radius: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
 }
 
@@ -1498,7 +1498,7 @@ h2 {
   gap: 9px;
   align-items: center;
   padding: 9px 0;
-  font-size: 13px;
+  font-size: 15px;
   color: #606861;
   border-bottom: 1px solid #efede8;
   flex: 1;
@@ -1509,7 +1509,7 @@ h2 {
   border: 0;
   background: transparent;
   color: var(--ink);
-  font-size: 11px;
+  font-size: 13px;
   outline: none;
 }
 
@@ -1531,7 +1531,7 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  font-size: 10px;
+  font-size: 11px;
   color: #6a756f;
   text-transform: capitalize;
 }
@@ -1542,6 +1542,7 @@ h2 {
   background: #fff;
   text-align: center;
   font-weight: 700;
+  font-size: 16px;
   color: var(--ink);
 }
 
@@ -1557,11 +1558,11 @@ h2 {
 .gut-box span:first-child {
   display: block;
   color: #9c9587;
-  font-size: 10px;
+  font-size: 11px;
 }
 .gut-box strong {
   display: block;
-  font: 600 21px 'Space Grotesk';
+  font: 600 24px 'Space Grotesk';
   margin-top: 5px;
 }
 .gut-box strong small {
@@ -1578,6 +1579,7 @@ h2 {
   padding: 10px 12px;
   background: #fff;
   color: var(--ink);
+  font-size: 14px;
 }
 
 .modal-overlay {
@@ -1714,8 +1716,8 @@ h2 {
   .metric-card.dark { grid-column: span 2; }
   .metric-top { font-size: 10px; }
   .task-row { padding: 12px 11px; gap: 8px; }
-  .task-info strong { font-size: 11px; }
+  .task-info strong { font-size: 14px; }
   .task-priority { width: 55px; }
-  .priority-label { font-size: 8px; }
-  .tag { font-size: 8px; }
+  .priority-label { font-size: 10px; }
+  .tag { font-size: 10px; }
 }
