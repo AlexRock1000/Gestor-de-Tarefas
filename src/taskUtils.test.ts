@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { computeScore, getDueState } from './taskUtils'
+import { computeScore, getDueState, getPriorityBand, getPriorityLabel, resolveDueForStatus } from './taskUtils'
 
 describe('computeScore', () => {
   it('multiplica gravidade, urgência e tendência', () => {
@@ -20,5 +20,29 @@ describe('getDueState', () => {
     expect(getDueState('16 set', 'Pendente', referenceDate)).toBe('overdue')
     expect(getDueState('24 set', 'Pendente', referenceDate)).toBe('upcoming')
     expect(getDueState('Sem prazo', 'Pendente', referenceDate)).toBe('undated')
+  })
+})
+
+describe('resolveDueForStatus', () => {
+  it('mantém prazo válido para tarefas ativas e marca concluídas corretamente', () => {
+    expect(resolveDueForStatus('Concluído', '24 set')).toBe('Concluída')
+    expect(resolveDueForStatus('Pendente', '24 set')).toBe('24 set')
+    expect(resolveDueForStatus('Pendente', 'Concluída')).toBe('Sem prazo')
+  })
+})
+
+describe('getPriorityBand', () => {
+  it('classifica corretamente a faixa de prioridade do score GUT', () => {
+    expect(getPriorityBand(100)).toBe('critical')
+    expect(getPriorityBand(70)).toBe('high')
+    expect(getPriorityBand(30)).toBe('low')
+  })
+})
+
+describe('getPriorityLabel', () => {
+  it('atribui o nome correto da prioridade', () => {
+    expect(getPriorityLabel(100)).toBe('Alta prioridade')
+    expect(getPriorityLabel(70)).toBe('Média')
+    expect(getPriorityLabel(30)).toBe('Baixa')
   })
 })

@@ -34,3 +34,31 @@ export const getDueState = (due: string, status: string, referenceDate = new Dat
   dueDate.setHours(0, 0, 0, 0)
   return dueDate < today ? 'overdue' : 'upcoming'
 }
+
+export const resolveDueForStatus = (status: string, currentDue: string) => {
+  if (status === 'Concluído') {
+    return 'Concluída'
+  }
+
+  if (currentDue === 'Concluída') {
+    return 'Sem prazo'
+  }
+
+  if (!currentDue || currentDue === 'Sem prazo') {
+    return 'Sem prazo'
+  }
+
+  return currentDue
+}
+
+export const getPriorityBand = (score: number) => {
+  if (score >= 80) return 'critical'
+  if (score >= 50) return 'high'
+  return 'low'
+}
+
+export const getPriorityLabel = (score: number) => {
+  if (score >= 80) return 'Alta prioridade'
+  if (score >= 50) return 'Média'
+  return 'Baixa'
+}
