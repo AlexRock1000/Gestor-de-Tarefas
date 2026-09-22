@@ -16,6 +16,7 @@ type TaskDetailDrawerProps = {
   onDeleteTask: () => void
   onCopyPrompt: (task: Task) => void
   onEditTask: () => void
+  onConfirmChanges: () => void
 }
 
 export function TaskDetailDrawer({
@@ -32,15 +33,21 @@ export function TaskDetailDrawer({
   onDeleteTask,
   onCopyPrompt,
   onEditTask,
+  onConfirmChanges,
 }: TaskDetailDrawerProps) {
   return (
-    <aside className="detail-drawer">
-      <div className="drawer-top">
-        <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
-        <button className="icon-button" onClick={onClose}><X size={18} /></button>
-      </div>
+    <div className="detail-overlay" onMouseDown={(event) => {
+      if (event.target === event.currentTarget) {
+        onClose()
+      }
+    }}>
+      <section className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
+        <div className="drawer-top">
+          <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
+          <button className="icon-button" onClick={onClose} aria-label="Fechar detalhes"><X size={18} /></button>
+        </div>
 
-      <h2>{task.title}</h2>
+      <h2 id="task-detail-title">{task.title}</h2>
       <p className="drawer-description">
         {task.observacoes || 'Organize os próximos passos e acompanhe o avanço desta frente operacional.'}
       </p>
@@ -147,6 +154,9 @@ export function TaskDetailDrawer({
         <button className="secondary-button" onClick={onEditTask}>
           Editar tarefa
         </button>
+          <button className="confirm-button" onClick={onConfirmChanges}>
+            <Check size={15} /> Confirmar alterações
+          </button>
         <button className="danger-button" onClick={onDeleteTask}>
           Excluir tarefa
         </button>
@@ -154,6 +164,7 @@ export function TaskDetailDrawer({
           {copiedTaskId === task.id ? <><Check size={15} /> Prompt copiado</> : <><Clipboard size={15} /> Copiar prompt de IA</>}
         </button>
       </div>
-    </aside>
+      </section>
+    </div>
   )
 }

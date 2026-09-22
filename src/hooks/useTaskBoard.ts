@@ -55,6 +55,12 @@ export const inputValueToDue = (value: string) => {
   return `${selected.getDate()} ${monthLabels[selected.getMonth()]}`
 }
 
+const formatCreatedAt = (date: Date) => {
+  const datePart = date.toLocaleDateString('pt-BR')
+  const timePart = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  return `${datePart} às ${timePart}`
+}
+
 export const initialTasks: Task[] = [
   {
     id: 1,
@@ -393,13 +399,14 @@ export function useTaskBoard() {
 
   const addTask = () => {
     const nextPhase = activePhase === 'Todas' ? 'Processos' : activePhase
+    const createdAt = formatCreatedAt(new Date())
     const newTask: Task = {
       id: Date.now(),
       title: 'Nova tarefa operacional',
       phase: nextPhase,
       status: 'Pendente',
       due: '30 set',
-      createdAt: 'Hoje',
+      createdAt,
       responsible: 'Não atribuída',
       gravidade: 3,
       urgencia: 3,

@@ -116,12 +116,15 @@ function App() {
         if (editingTask) {
           setEditingTask(null)
         }
+        if (selectedTaskId) {
+          setSelectedTaskId(null)
+        }
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [editingTask, notificationsOpen])
+  }, [editingTask, notificationsOpen, selectedTaskId, setSelectedTaskId])
 
   useEffect(() => {
     if (!toast) {
@@ -619,6 +622,10 @@ function App() {
           onDeleteTask={() => deleteTask(selectedTask.id)}
           onCopyPrompt={(task) => void copyPrompt(task)}
           onEditTask={() => setEditingTask({ ...selectedTask })}
+          onConfirmChanges={() => {
+            showToast('Alterações confirmadas')
+            setSelectedTaskId(null)
+          }}
         />
       )}
 

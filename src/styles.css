@@ -1452,17 +1452,25 @@ h2 {
   font-size: 12px;
 }
 
-.detail-drawer {
+.detail-overlay {
   position: fixed;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: 330px;
-  padding: 25px;
-  background: #fbfaf7;
-  box-shadow: -10px 0 30px #26312b12;
-  border-left: 1px solid var(--line);
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(8, 15, 15, 0.64);
   z-index: 10;
+}
+
+.detail-drawer {
+  width: min(820px, 100%);
+  max-height: min(900px, calc(100vh - 40px));
+  padding: 30px 32px;
+  background: #fbfaf7;
+  box-shadow: 0 24px 70px rgba(8, 15, 15, 0.35);
+  border: 1px solid var(--line);
+  border-radius: 14px;
   overflow-y: auto;
 }
 .drawer-top { display: flex; justify-content: space-between; align-items: center; }
@@ -1552,6 +1560,22 @@ h2 {
   font-size: 14px;
   font-weight: 600;
 }
+
+.confirm-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #2b4d44;
+  background: #2b4d44;
+  color: #fff;
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.confirm-button:hover { background: #3c665b; }
 
 .danger-button {
   border: 1px solid #efc4bf;
@@ -1744,7 +1768,7 @@ h2 {
   .phase-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .report-grid { grid-template-columns: 1fr; }
   .history-header { align-items: flex-start; flex-direction: column; }
-  .detail-drawer { width: 290px; }
+  .detail-drawer { width: min(760px, 100%); }
 }
 
 @media (max-width: 780px) {
@@ -1793,7 +1817,7 @@ h2 {
   .filter-tabs { max-width: none; overflow: auto; }
   .filter-tabs button { white-space: nowrap; }
   .task-priority { width: 65px; }
-  .detail-drawer { width: min(360px, 92vw); }
+  .detail-drawer { width: min(720px, 92vw); }
   .hero-row h1 { font-size: 26px; }
 }
 

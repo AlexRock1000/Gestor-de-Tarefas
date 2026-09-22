@@ -80,7 +80,7 @@ export function TaskEditorModal({
           <div className="modal-grid">
             <label className="field">
               <span>Criada em</span>
-              <input value={editingTask.createdAt} onChange={(event) => onFieldChange('createdAt', event.target.value)} />
+              <input value={editingTask.createdAt} readOnly aria-readonly="true" />
             </label>
 
             <label className="field">
