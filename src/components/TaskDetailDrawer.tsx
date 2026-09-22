@@ -141,7 +141,7 @@ export function TaskDetailDrawer({
         </button>
 
         {draftTask.checklist.map((item, index) => (
-          <div className="check-item-row" key={`${draftTask.id}-${item.label}-${index}`}>
+          <div className="check-item-row" key={`${draftTask.id}-checklist-${index}`}>
             <label className="check-item">
               <input
                 type="checkbox"

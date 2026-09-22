@@ -8,6 +8,7 @@ type TaskEditorModalProps = {
   onClose: () => void
   onFieldChange: <K extends keyof Task>(field: K, value: Task[K]) => void
   onSave: () => void
+  isCreatingTask: boolean
   dueToInputValue: (due: string) => string
   inputValueToDue: (value: string) => string
 }
@@ -19,6 +20,7 @@ export function TaskEditorModal({
   onClose,
   onFieldChange,
   onSave,
+  isCreatingTask,
   dueToInputValue,
   inputValueToDue,
 }: TaskEditorModalProps) {
@@ -27,8 +29,8 @@ export function TaskEditorModal({
       <div className="modal-card" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <p className="eyebrow">EDIÇÃO DE TAREFA</p>
-            <h3>Detalhes da operação</h3>
+            <p className="eyebrow">{isCreatingTask ? 'NOVA TAREFA' : 'EDIÇÃO DE TAREFA'}</p>
+            <h3>{isCreatingTask ? 'Configurar tarefa' : 'Detalhes da operação'}</h3>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Fechar modal">
             <X size={18} />
@@ -121,7 +123,7 @@ export function TaskEditorModal({
 
         <div className="modal-footer">
           <button className="secondary-button" onClick={onClose}>Cancelar</button>
-          <button className="primary-button" onClick={onSave}>Salvar alterações</button>
+          <button className="primary-button" onClick={onSave}>{isCreatingTask ? 'Criar tarefa' : 'Salvar alterações'}</button>
         </div>
       </div>
     </div>

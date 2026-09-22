@@ -61,6 +61,8 @@ function App() {
     copiedTaskId,
     editingTask,
     setEditingTask,
+    isCreatingTask,
+    setIsCreatingTask,
     draggedTaskId,
     setDraggedTaskId,
     dragOverStatus,
@@ -111,6 +113,7 @@ function App() {
         }
         if (editingTask) {
           setEditingTask(null)
+          setIsCreatingTask(false)
         }
         if (selectedTaskId) {
           setSelectedTaskId(null)
@@ -611,7 +614,10 @@ function App() {
           onClose={() => setSelectedTaskId(null)}
           onDeleteTask={() => deleteTask(selectedTask.id)}
           onCopyPrompt={(task) => void copyPrompt(task)}
-          onEditTask={() => setEditingTask({ ...selectedTask })}
+          onEditTask={() => {
+            setIsCreatingTask(false)
+            setEditingTask({ ...selectedTask })
+          }}
           onConfirmChanges={(task) => {
             saveTaskChanges(task)
             showToast('Alterações confirmadas')
@@ -623,9 +629,13 @@ function App() {
       {editingTask && (
         <TaskEditorModal
           editingTask={editingTask}
+          isCreatingTask={isCreatingTask}
           phases={phases}
           statusOrder={statusOrder}
-          onClose={() => setEditingTask(null)}
+          onClose={() => {
+            setEditingTask(null)
+            setIsCreatingTask(false)
+          }}
           onFieldChange={(field, value) => setEditingTask({ ...editingTask, [field]: value })}
           onSave={saveEditedTask}
           dueToInputValue={dueToInputValue}

@@ -237,6 +237,7 @@ export function useTaskBoard() {
   })
   const [copiedTaskId, setCopiedTaskId] = useState<number | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
+  const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null)
   const [activities, setActivities] = useState<Activity[]>(() => {
@@ -418,12 +419,9 @@ export function useTaskBoard() {
       observacoes: 'Atribuir responsável e cronograma inicial para acompanhamento.',
     }
 
-    setTasks((current) => [...current, newTask])
-    setSelectedTaskId(newTask.id)
-    setActivities((current) => [
-      { id: Date.now(), actor: 'Daniel', tone: 'teal' as const, message: 'criou', taskTitle: newTask.title, time: 'Agora' },
-      ...current,
-    ].slice(0, 12))
+    setSelectedTaskId(null)
+    setIsCreatingTask(true)
+    setEditingTask(newTask)
   }
 
   const deleteTask = (taskId: number) => {
@@ -577,17 +575,29 @@ export function useTaskBoard() {
       ),
     }
 
-    setTasks((current) =>
-      current.map((task) =>
-        task.id === normalizedTask.id
-          ? { ...task, ...normalizedTask }
-          : task,
-      ),
-    )
+    if (isCreatingTask) {
+      setTasks((current) => [...current, normalizedTask])
+    } else {
+      setTasks((current) =>
+        current.map((task) =>
+          task.id === normalizedTask.id
+            ? { ...task, ...normalizedTask }
+            : task,
+        ),
+      )
+    }
     setSelectedTaskId(normalizedTask.id)
     setEditingTask(null)
+    setIsCreatingTask(false)
     setActivities((current) => [
-      { id: Date.now(), actor: 'Daniel', tone: 'amber' as const, message: 'editou', taskTitle: normalizedTask.title, time: 'Agora' },
+      {
+        id: Date.now(),
+        actor: 'Daniel',
+        tone: isCreatingTask ? 'teal' as const : 'amber' as const,
+        message: isCreatingTask ? 'criou' : 'editou',
+        taskTitle: normalizedTask.title,
+        time: 'Agora',
+      },
       ...current,
     ].slice(0, 12))
   }
@@ -691,6 +701,8 @@ export function useTaskBoard() {
     setCopiedTaskId,
     editingTask,
     setEditingTask,
+    isCreatingTask,
+    setIsCreatingTask,
     draggedTaskId,
     setDraggedTaskId,
     dragOverStatus,
