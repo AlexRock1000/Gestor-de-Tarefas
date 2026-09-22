@@ -1,5 +1,6 @@
+import { useEffect, useState } from 'react'
 import { Check, Clipboard, X } from 'lucide-react'
-import { getPriorityBand, getPriorityLabel } from '../taskUtils'
+import { computeScore, getPriorityBand, getPriorityLabel, resolveDueForStatus } from '../taskUtils'
 import type { Status, Task } from '../types'
 
 type TaskDetailDrawerProps = {
@@ -7,16 +8,10 @@ type TaskDetailDrawerProps = {
   copiedTaskId: number | null
   statusOrder: Status[]
   onClose: () => void
-  onStatusChange: (status: Status) => void
-  onUpdateTask: (field: keyof Task, value: string | number | boolean) => void
-  onToggleChecklist: (itemIndex: number) => void
-  onAddChecklistItem: () => void
-  onRemoveChecklistItem: (itemIndex: number) => void
-  onUpdateChecklistLabel: (itemIndex: number, label: string) => void
   onDeleteTask: () => void
   onCopyPrompt: (task: Task) => void
   onEditTask: () => void
-  onConfirmChanges: () => void
+  onConfirmChanges: (task: Task) => void
 }
 
 export function TaskDetailDrawer({
@@ -24,17 +19,41 @@ export function TaskDetailDrawer({
   copiedTaskId,
   statusOrder,
   onClose,
-  onStatusChange,
-  onUpdateTask,
-  onToggleChecklist,
-  onAddChecklistItem,
-  onRemoveChecklistItem,
-  onUpdateChecklistLabel,
   onDeleteTask,
   onCopyPrompt,
   onEditTask,
   onConfirmChanges,
 }: TaskDetailDrawerProps) {
+  const [draftTask, setDraftTask] = useState(task)
+
+  useEffect(() => {
+    setDraftTask(task)
+  }, [task])
+
+  const updateDraft = <K extends keyof Task>(field: K, value: Task[K]) => {
+    setDraftTask((current) => {
+      const nextTask = { ...current, [field]: value }
+      if (field === 'gravidade' || field === 'urgencia' || field === 'tendencia') {
+        nextTask.scoreGut = computeScore(nextTask.gravidade, nextTask.urgencia, nextTask.tendencia)
+      }
+      return nextTask
+    })
+  }
+
+  const updateDraftStatus = (status: Status) => {
+    updateDraft('status', status)
+    updateDraft('due', resolveDueForStatus(status, draftTask.due))
+  }
+
+  const toggleDraftChecklist = (itemIndex: number) => {
+    setDraftTask((current) => ({
+      ...current,
+      checklist: current.checklist.map((item, index) =>
+        index === itemIndex ? { ...item, done: !item.done } : item,
+      ),
+    }))
+  }
+
   return (
     <div className="detail-overlay" onMouseDown={(event) => {
       if (event.target === event.currentTarget) {
@@ -54,7 +73,7 @@ export function TaskDetailDrawer({
 
       <div className="drawer-status">
         <span>Status</span>
-        <select value={task.status} onChange={(event) => onStatusChange(event.target.value as Status)}>
+        <select value={draftTask.status} onChange={(event) => updateDraftStatus(event.target.value as Status)}>
           {statusOrder.map((status) => (
             <option key={status} value={status}>{status}</option>
           ))}
@@ -64,18 +83,18 @@ export function TaskDetailDrawer({
       <div className="drawer-meta-grid">
         <div className="drawer-meta-card">
           <span>Responsável</span>
-          <strong>{task.responsible}</strong>
+          <strong>{draftTask.responsible}</strong>
         </div>
         <div className="drawer-meta-card">
           <span>Criada em</span>
-          <strong>{task.createdAt}</strong>
+          <strong>{draftTask.createdAt}</strong>
         </div>
       </div>
 
       <div className="drawer-section gut-panel">
         <div className="drawer-section-head">
           <h3>Matriz GUT</h3>
-          <span>{task.scoreGut}</span>
+          <span>{draftTask.scoreGut}</span>
         </div>
 
         <div className="gut-grid">
@@ -86,11 +105,11 @@ export function TaskDetailDrawer({
                 type="number"
                 min={1}
                 max={5}
-                value={task[field]}
+                value={draftTask[field]}
                 onChange={(event) => {
                   const nextValue = Number(event.target.value)
                   const safeValue = Number.isNaN(nextValue) ? 1 : Math.min(5, Math.max(1, nextValue))
-                  onUpdateTask(field, safeValue)
+                  updateDraft(field, safeValue)
                 }}
               />
             </label>
@@ -100,10 +119,10 @@ export function TaskDetailDrawer({
         <div className="gut-box">
           <div>
             <span>Prioridade GUT</span>
-            <strong>{task.scoreGut}<small> / 125</small></strong>
+            <strong>{draftTask.scoreGut}<small> / 125</small></strong>
           </div>
           <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>
-            {getPriorityLabel(task.scoreGut)}
+            {getPriorityLabel(draftTask.scoreGut)}
           </span>
         </div>
       </div>
@@ -111,28 +130,39 @@ export function TaskDetailDrawer({
       <div className="drawer-section">
         <div className="drawer-section-head">
           <h3>Checklist</h3>
-          <span>{task.checklist.filter((item) => item.done).length}/{task.checklist.length}</span>
+          <span>{draftTask.checklist.filter((item) => item.done).length}/{draftTask.checklist.length}</span>
         </div>
 
-        <button className="secondary-button add-item-button" onClick={onAddChecklistItem}>
+        <button className="secondary-button add-item-button" onClick={() => setDraftTask((current) => ({
+          ...current,
+          checklist: [...current.checklist, { label: `Novo item ${current.checklist.length + 1}`, done: false }],
+        }))}>
           + Adicionar item
         </button>
 
-        {task.checklist.map((item, index) => (
-          <div className="check-item-row" key={`${task.id}-${item.label}-${index}`}>
+        {draftTask.checklist.map((item, index) => (
+          <div className="check-item-row" key={`${draftTask.id}-${item.label}-${index}`}>
             <label className="check-item">
               <input
                 type="checkbox"
                 checked={item.done}
-                onChange={() => onToggleChecklist(index)}
+                onChange={() => toggleDraftChecklist(index)}
               />
               <input
                 value={item.label}
-                onChange={(event) => onUpdateChecklistLabel(index, event.target.value)}
+                onChange={(event) => setDraftTask((current) => ({
+                  ...current,
+                  checklist: current.checklist.map((checkItem, checkIndex) =>
+                    checkIndex === index ? { ...checkItem, label: event.target.value } : checkItem,
+                  ),
+                }))}
                 className="check-item-input"
               />
             </label>
-            <button className="remove-item-button" onClick={() => onRemoveChecklistItem(index)} aria-label="Remover item">
+            <button className="remove-item-button" onClick={() => setDraftTask((current) => ({
+              ...current,
+              checklist: current.checklist.filter((_, checkIndex) => checkIndex !== index),
+            }))} aria-label="Remover item">
               ×
             </button>
           </div>
@@ -144,8 +174,8 @@ export function TaskDetailDrawer({
           <h3>Anotações</h3>
         </div>
         <textarea
-          value={task.observacoes}
-          onChange={(event) => onUpdateTask('observacoes', event.target.value)}
+          value={draftTask.observacoes}
+          onChange={(event) => updateDraft('observacoes', event.target.value)}
           rows={4}
         />
       </div>
@@ -154,7 +184,7 @@ export function TaskDetailDrawer({
         <button className="secondary-button" onClick={onEditTask}>
           Editar tarefa
         </button>
-          <button className="confirm-button" onClick={onConfirmChanges}>
+          <button className="confirm-button" onClick={() => onConfirmChanges(draftTask)}>
             <Check size={15} /> Confirmar alterações
           </button>
         <button className="danger-button" onClick={onDeleteTask}>

@@ -84,15 +84,11 @@ function App() {
     alertCount,
     hasActiveFilters,
     clearFilters,
-    handleTaskFieldUpdate,
+    saveTaskChanges,
     updateStatus,
     handleKanbanDrop,
-    toggleChecklist,
     addTask,
     deleteTask,
-    addChecklistItem,
-    removeChecklistItem,
-    updateChecklistLabel,
     copyPrompt,
     exportTasks,
     importTasks,
@@ -613,16 +609,11 @@ function App() {
           copiedTaskId={copiedTaskId}
           statusOrder={statusOrder}
           onClose={() => setSelectedTaskId(null)}
-          onStatusChange={(status) => updateStatus(selectedTask.id, status)}
-          onUpdateTask={(field, value) => handleTaskFieldUpdate(selectedTask.id, field, value)}
-          onToggleChecklist={(itemIndex) => toggleChecklist(selectedTask.id, itemIndex)}
-          onAddChecklistItem={() => addChecklistItem(selectedTask.id)}
-          onRemoveChecklistItem={(itemIndex) => removeChecklistItem(selectedTask.id, itemIndex)}
-          onUpdateChecklistLabel={(itemIndex, label) => updateChecklistLabel(selectedTask.id, itemIndex, label)}
           onDeleteTask={() => deleteTask(selectedTask.id)}
           onCopyPrompt={(task) => void copyPrompt(task)}
           onEditTask={() => setEditingTask({ ...selectedTask })}
-          onConfirmChanges={() => {
+          onConfirmChanges={(task) => {
+            saveTaskChanges(task)
             showToast('Alterações confirmadas')
             setSelectedTaskId(null)
           }}

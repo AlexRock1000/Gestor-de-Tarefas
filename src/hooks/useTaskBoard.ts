@@ -662,6 +662,10 @@ export function useTaskBoard() {
     updateTask(taskId, { [field]: value } as Partial<Task>)
   }
 
+  const saveTaskChanges = (task: Task) => {
+    updateTask(task.id, task)
+  }
+
   return {
     tasks,
     setTasks,
@@ -712,6 +716,7 @@ export function useTaskBoard() {
     hasActiveFilters,
     clearFilters,
     handleTaskFieldUpdate,
+    saveTaskChanges,
     updateStatus,
     handleKanbanDrop,
     toggleChecklist,
