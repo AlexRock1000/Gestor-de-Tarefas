@@ -225,7 +225,7 @@ export function useTaskBoard() {
   const [responsibleFilter, setResponsibleFilter] = useState('Todos')
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineFilter>('Todos')
   const [gutFilter, setGutFilter] = useState<GutFilter>('Todos')
-  const [activeView, setActiveView] = useState('Visão geral')
+  const [activeView, setActiveView] = useState('Minhas tarefas')
   const [search, setSearch] = useState('')
   const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
     if (typeof window === 'undefined') {
