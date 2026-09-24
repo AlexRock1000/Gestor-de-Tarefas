@@ -269,6 +269,54 @@ function App() {
     </section>
   )
 
+  const documentCards = [
+    {
+      title: 'Documentação UX',
+      description: 'Visão geral das experiências, requisitos e decisões de interface do gestor de tarefas.',
+      status: 'Atualizado',
+    },
+    {
+      title: 'Especificações iniciais',
+      description: 'Requisitos iniciais do projeto, regras de negócio e critérios de priorização da operação.',
+      status: 'Base do produto',
+    },
+    {
+      title: 'Checklist de implementação',
+      description: 'Pendências e próximos passos para evoluir o produto com mais estabilidade e UX.',
+      status: 'Em andamento',
+    },
+  ]
+
+  const renderDocumentsView = () => (
+    <section className="history-view">
+      <div className="history-header">
+        <div>
+          <p className="eyebrow">CENTRO DE CONHECIMENTO</p>
+          <h1>Documentos</h1>
+          <p>Arquivos e referências do projeto organizados em um único ponto de entrada.</p>
+        </div>
+        <span className="history-count">{documentCards.length} registros</span>
+      </div>
+
+      <div className="report-grid">
+        {documentCards.map((document) => (
+          <article className="report-card" key={document.title}>
+            <div className="report-card-heading">
+              <div>
+                <h2>{document.title}</h2>
+                <p>{document.description}</p>
+              </div>
+              <span>{document.status}</span>
+            </div>
+            <div className="filter-summary">
+              <span>Contexto operacional</span>
+            </div>
+          </article>
+        ))}
+      </div>
+    </section>
+  )
+
   const renderKanbanView = () => (
     <section className="kanban-view">
       <div className="kanban-header">
@@ -500,7 +548,7 @@ function App() {
           <button className={activeView === 'Prompts IA' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Prompts IA')}><Sparkles size={17} /> Prompts IA <span className="new-pill">novo</span></button>
 
           <p className="nav-label second">Organização</p>
-          <button className="nav-item"><FileText size={17} /> Documentos</button>
+          <button className={activeView === 'Documentos' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Documentos')}><FileText size={17} /> Documentos</button>
           <button className={activeView === 'Histórico' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Histórico')}><Clock3 size={17} /> Histórico</button>
         </nav>
 
@@ -600,7 +648,7 @@ function App() {
 
         <div className="content-wrap">
           {isOverview && renderOverview()}
-          {activeView === 'Histórico' ? renderHistoryView() : activeView === 'Quadro' ? renderKanbanView() : renderTaskWorkspace()}
+          {activeView === 'Histórico' ? renderHistoryView() : activeView === 'Quadro' ? renderKanbanView() : activeView === 'Documentos' ? renderDocumentsView() : renderTaskWorkspace()}
         </div>
 
         {toast && <div className="toast" role="status" aria-live="polite">{toast}</div>}
