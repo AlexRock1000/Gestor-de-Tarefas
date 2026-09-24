@@ -1,54 +1,94 @@
-# Documento de evolução da experiência do usuário
+# Diretrizes de experiência do usuário
 
-## Data
-21/09/2026
+## Objetivo
 
-## Contexto
-A última alteração foi orientada para aumentar a intuição e a velocidade de uso do sistema no dia a dia da operação, priorizando a experiência do usuário em vez de apenas a funcionalidade técnica.
+Este documento orienta as próximas evoluções do Gestor de Tarefas. A experiência deve ajudar as pessoas a entender o que precisa de atenção, encontrar a próxima ação e concluir o trabalho com o mínimo de esforço.
 
-O objetivo principal foi deixar a ferramenta mais prática para uso recorrente por uma equipe, com foco em:
-- operação rápida;
-- redução de cliques;
-- filtros imediatos para tomada de decisão;
-- maior clareza na priorização de tarefas;
-- melhora na percepção visual do que precisa atenção.
+Toda mudança de interface deve partir de uma necessidade de uso. Aparência e tecnologia devem apoiar essa necessidade, com clareza, confiança, acessibilidade e consistência.
 
-## Alteração implementada
-### 1. Filtros rápidos de operação
-Foram adicionados atalhos rápidos no painel de tarefas para facilitar a rotina diária:
-- Todos
-- Hoje
-- Urgentes
-- Concluídas
+## Direção atual da interface
 
-Esses atalhos permitem ao usuário identificar rapidamente:
-- o que está em atraso ou vence hoje;
-- o que exige atenção imediata;
-- o que já foi concluído;
-- o conjunto geral de tarefas sem necessidade de múltiplos filtros manuais.
+A interface usa a organização visual do Spotify como referência de navegação: menu lateral, biblioteca de atalhos, área principal de trabalho, busca em destaque e uma paleta escura com verde para ações importantes. É uma inspiração de padrões de uso, não uma reprodução da marca ou de seus elementos proprietários.
 
-### 2. Priorização visual para tarefas críticas
-Os filtros rápidos passaram a exibir contadores visuais, deixando evidente a quantidade de itens em cada categoria. Isso reduz a carga cognitiva do usuário e melhora a tomada de decisão em menos tempo.
+A experiência atual organiza o trabalho assim:
 
-### 3. Melhor dinâmica de uso em rotina operacional
-A ideia foi reduzir o esforço de navegação e permitir que o usuário compreenda o estado do trabalho quase instantaneamente. Isso é especialmente útil para compartilhamento entre colegas e uso frequente em ambientes operacionais.
+- A aplicação abre em **Minhas tarefas**, onde a pessoa pode começar a trabalhar imediatamente.
+- A navegação lateral separa as áreas do produto e a biblioteca de tarefas.
+- A biblioteca oferece atalhos para **Todas as tarefas**, **Para hoje**, **Prioritárias** e **Concluídas**.
+- A busca fica disponível no topo e pesquisa tarefas enquanto a pessoa digita.
+- **Nova tarefa** é uma ação primária fácil de localizar.
+- Os filtros mais usados aparecem como opções rápidas; fase, status, responsável, prazo e prioridade ficam em **Mais filtros** até serem necessários.
+- Atividade recente e ajuda com prompts ficam como apoio ao fluxo principal, sem competir com a lista.
+- Em telas menores, a navegação passa para uma faixa rolável e o conteúdo ocupa uma coluna.
 
-## Por que essa mudança importa
-Essa evolução está alinhada com a necessidade de um sistema que seja:
-- intuitivo;
-- eficiente no uso diário;
-- fácil de usar por diferentes pessoas;
-- útil para acompanhamento operacional e tomada de decisão.
+Os contadores, filtros e estados devem sempre refletir os mesmos dados. Ao abrir um atalho da biblioteca, filtros avançados anteriores são limpos para evitar resultados inesperados.
 
-A experiência do usuário foi priorizada acima de ajustes exclusivamente estéticos, porque a maior necessidade do produto é permitir que a equipe trabalhe com velocidade, clareza e confiança.
+## Princípios de produto
 
-## Direção para próximas melhorias
-As próximas alterações devem continuar na mesma linha de foco de UX:
-1. reduzir passos de criação e edição de tarefas;
-2. reforçar feedback visual de ações realizadas;
-3. melhorar a responsividade em telas menores;
-4. tornar a navegação mais previsível e confortável;
-5. reforçar acessibilidade e legibilidade para uso contínuo.
+### 1. Mostrar primeiro o próximo passo
 
-## Resumo
-A última alteração foi guiada por um princípio central: o sistema precisa funcionar como uma ferramenta de operação diária, não apenas como um painel técnico. O foco foi melhorar rapidez, clareza e dinamismo, tornando o fluxo mais natural para o usuário e para a equipe.
+Priorize as tarefas e ações do dia a dia na tela inicial. Relatórios e indicadores ajudam a entender o contexto, mas não devem empurrar a lista de trabalho para baixo nem competir com a ação principal.
+
+### 2. Tornar a navegação previsível
+
+Use nomes curtos e familiares. A pessoa deve conseguir identificar onde está, voltar a uma visão conhecida e antecipar o resultado de cada atalho. Mantenha a seleção ativa visível.
+
+### 3. Revelar complexidade quando fizer falta
+
+Deixe as opções frequentes à vista. Agrupe filtros e configurações menos usados atrás de controles claramente nomeados, como **Mais filtros**. Sempre indique quando um filtro está ativo e ofereça uma maneira simples de limpá-lo.
+
+### 4. Dar retorno claro a cada ação
+
+Depois de criar, editar, concluir, excluir, copiar ou importar dados, informe o resultado de forma visível e imediata. Preserve o contexto da pessoa sempre que possível e permita desfazer ações destrutivas quando o fluxo comportar isso.
+
+### 5. Usar visual para orientar, não decorar
+
+Use cor, contraste, tamanho e espaçamento para indicar prioridade, estado e hierarquia. Reserve a cor de destaque para ações principais e informação relevante. Não dependa somente da cor para comunicar status.
+
+### 6. Projetar para diferentes pessoas e dispositivos
+
+Mantenha textos legíveis, controles nomeados, foco de teclado visível e ordem de navegação lógica. Em telas pequenas, preserve acesso às funções importantes sem exigir precisão excessiva ou rolagem horizontal da página inteira.
+
+### 7. Mostrar informação verdadeira
+
+Contadores, datas, progresso, nomes e indicadores devem vir dos dados atuais. Evite datas fixas, exemplos apresentados como informação real e números que não correspondam ao filtro mostrado.
+
+## Diretrizes para próximas alterações
+
+Antes de implementar uma mudança:
+
+1. Identifique quem está usando a função, em que situação e qual tarefa deseja concluir.
+2. Descreva o caminho atual e a dificuldade que a mudança deve resolver.
+3. Prefira a solução que exige menos decisões e etapas sem esconder controles importantes.
+4. Reutilize padrões visuais e de interação que já existem no produto.
+5. Considere estados carregando, vazio, sucesso, erro e sem permissão quando forem aplicáveis.
+6. Confira o fluxo em desktop e celular, incluindo teclado e leitor de tela nos controles interativos.
+7. Avalie a mudança pelo efeito no tempo, na compreensão ou na confiança da pessoa, não só pela quantidade de componentes alterados.
+
+### Checklist de revisão
+
+- A ação principal da tela está clara?
+- Os rótulos descrevem o resultado esperado?
+- A seleção atual e os filtros ativos ficam visíveis?
+- A busca, os atalhos e os contadores correspondem aos resultados apresentados?
+- A pessoa recebe feedback depois de uma ação?
+- É possível completar o fluxo com teclado e identificar o foco?
+- Os controles continuam fáceis de encontrar e usar em telas estreitas?
+- Os textos, exemplos e dados exibidos são corretos e compreensíveis?
+- O novo elemento ajuda no fluxo principal sem criar distração ou duplicação?
+
+## Próximas oportunidades
+
+As próximas melhorias devem continuar priorizando a experiência de ponta a ponta, com atenção especial a:
+
+- simplificar a criação e a edição de tarefas;
+- facilitar a identificação da próxima tarefa importante;
+- melhorar a edição rápida de status e prazo;
+- apresentar estados vazios e resultados de busca sem ambiguidade;
+- validar acessibilidade, legibilidade e navegação por teclado;
+- manter uma experiência consistente entre desktop e celular;
+- tornar relatórios e atividade úteis sem sobrecarregar a tela inicial.
+
+## Registro da atualização de interface
+
+A atualização inspirada na navegação do Spotify reorganizou a entrada do produto para abrir na lista de tarefas, acrescentou atalhos da biblioteca, tornou a criação mais visível, recolheu filtros avançados e ajustou a navegação para telas menores. A inspiração visual foi aplicada ao contexto de gestão de tarefas, mantendo os nomes, estados e ações próprios do produto.
