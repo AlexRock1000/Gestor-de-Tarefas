@@ -565,8 +565,19 @@ export function useTaskBoard() {
       return
     }
 
+    const trimmedTitle = editingTask.title.trim()
+    const trimmedResponsible = editingTask.responsible.trim()
+    const trimmedTag = editingTask.tag.trim()
+
+    if (!trimmedTitle || !trimmedResponsible) {
+      return
+    }
+
     const normalizedTask = {
       ...editingTask,
+      title: trimmedTitle,
+      responsible: trimmedResponsible,
+      tag: trimmedTag || 'Geral',
       due: resolveDueForStatus(editingTask.status, editingTask.due),
       scoreGut: computeScore(
         editingTask.gravidade,

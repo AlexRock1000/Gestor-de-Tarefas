@@ -150,6 +150,44 @@ function App() {
     handleNavClick('Minhas tarefas')
   }
 
+  const handleSaveEditedTask = () => {
+    if (!editingTask) {
+      return
+    }
+
+    const trimmedTitle = editingTask.title.trim()
+    const trimmedResponsible = editingTask.responsible.trim()
+
+    if (!trimmedTitle || !trimmedResponsible) {
+      showToast('Preencha título e responsável antes de salvar')
+      return
+    }
+
+    saveEditedTask()
+    showToast(isCreatingTask ? 'Tarefa criada com sucesso' : 'Tarefa salva com sucesso')
+  }
+
+  const handleDeleteSelectedTask = () => {
+    if (!selectedTask) {
+      return
+    }
+
+    deleteTask(selectedTask.id)
+    showToast('Tarefa removida')
+    setSelectedTaskId(null)
+  }
+
+  const handleToggleTaskStatus = (taskId: number) => {
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task) {
+      return
+    }
+
+    const nextStatus = task.status === 'Concluído' ? 'Pendente' : 'Concluído'
+    updateStatus(taskId, nextStatus)
+    showToast(nextStatus === 'Concluído' ? 'Tarefa concluída' : 'Tarefa reaberta')
+  }
+
   const renderOverview = () => (
     <>
       <section className="hero-row">
@@ -496,10 +534,7 @@ function App() {
               selectedTaskId={selectedTaskId}
               copiedTaskId={copiedTaskId}
               onSelect={setSelectedTaskId}
-              onToggleStatus={(taskId) => {
-                const nextStatus = visibleTasks.find((item) => item.id === taskId)?.status === 'Concluído' ? 'Pendente' : 'Concluído'
-                updateStatus(taskId, nextStatus)
-              }}
+              onToggleStatus={handleToggleTaskStatus}
               onEdit={setEditingTask}
               onCopyPrompt={copyPrompt}
             />
@@ -692,7 +727,7 @@ function App() {
           copiedTaskId={copiedTaskId}
           statusOrder={statusOrder}
           onClose={() => setSelectedTaskId(null)}
-          onDeleteTask={() => deleteTask(selectedTask.id)}
+          onDeleteTask={handleDeleteSelectedTask}
           onCopyPrompt={(task) => void copyPrompt(task)}
           onEditTask={() => {
             setIsCreatingTask(false)
@@ -717,7 +752,7 @@ function App() {
             setIsCreatingTask(false)
           }}
           onFieldChange={(field, value) => setEditingTask({ ...editingTask, [field]: value })}
-          onSave={saveEditedTask}
+          onSave={handleSaveEditedTask}
           dueToInputValue={dueToInputValue}
           inputValueToDue={inputValueToDue}
         />
