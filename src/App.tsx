@@ -37,12 +37,43 @@ import {
   useTaskBoard,
 } from './hooks/useTaskBoard'
 
+const readLocalSetting = (key: string, fallback: string) => {
+  if (typeof window === 'undefined') return fallback
+  return window.localStorage.getItem(key) || fallback
+}
+
+const exportActivitiesCsv = (activities: { actor: string; message: string; taskTitle: string; time: string }[]) => {
+  const rows = [
+    ['Responsável', 'Ação', 'Tarefa', 'Horário'],
+    ...activities.map((activity) => [activity.actor, activity.message, activity.taskTitle, activity.time]),
+  ]
+  const csv = rows
+    .map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(','))
+    .join('\r\n')
+  const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = 'historico-de-atividades.csv'
+  link.click()
+  window.setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [activityMenuOpen, setActivityMenuOpen] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
+  const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false)
+  const [profileName, setProfileName] = useState(() => readLocalSetting('gestor-de-tarefas-profile-name', 'Daniel Rocha'))
+  const [profileDraft, setProfileDraft] = useState(profileName)
+  const [workspaceName, setWorkspaceName] = useState(() => readLocalSetting('gestor-de-tarefas-workspace-name', 'Operação 2026'))
+  const [workspaceDraft, setWorkspaceDraft] = useState(workspaceName)
   const [toast, setToast] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
+  const activityMenuRef = useRef<HTMLDivElement | null>(null)
+  const profileMenuRef = useRef<HTMLDivElement | null>(null)
+  const workspaceMenuRef = useRef<HTMLDivElement | null>(null)
 
   const {
     activePhase,
@@ -116,6 +147,9 @@ function App() {
         if (notificationsOpen) {
           setNotificationsOpen(false)
         }
+        setActivityMenuOpen(false)
+        setProfileMenuOpen(false)
+        setWorkspaceMenuOpen(false)
         if (editingTask) {
           setEditingTask(null)
           setIsCreatingTask(false)
@@ -129,6 +163,26 @@ function App() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [editingTask, notificationsOpen, selectedTaskId, setSelectedTaskId])
+
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as Node
+      if (!activityMenuRef.current?.contains(target)) setActivityMenuOpen(false)
+      if (!profileMenuRef.current?.contains(target)) setProfileMenuOpen(false)
+      if (!workspaceMenuRef.current?.contains(target)) setWorkspaceMenuOpen(false)
+    }
+
+    document.addEventListener('pointerdown', handlePointerDown)
+    return () => document.removeEventListener('pointerdown', handlePointerDown)
+  }, [])
+
+  useEffect(() => {
+    window.localStorage.setItem('gestor-de-tarefas-profile-name', profileName)
+  }, [profileName])
+
+  useEffect(() => {
+    window.localStorage.setItem('gestor-de-tarefas-workspace-name', workspaceName)
+  }, [workspaceName])
 
   useEffect(() => {
     if (!toast) {
@@ -189,6 +243,9 @@ function App() {
     showToast(`Status atualizado para ${nextStatus}`)
   }
 
+  const profileInitials = profileName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'DR'
+  const firstName = profileName.trim().split(/\s+/)[0] || 'Daniel'
+  const workspaceInitials = workspaceName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'OP'
   const todayLabel = new Date()
     .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
     .toUpperCase()
@@ -200,7 +257,7 @@ function App() {
       <section className="hero-row">
         <div>
           <p className="eyebrow">{todayLabel}</p>
-          <h1>Bom dia, Daniel <span>✦</span></h1>
+          <h1>Bom dia, {firstName} <span>✦</span></h1>
           <p className="hero-subtitle">Aqui está o pulso da sua operação hoje.</p>
         </div>
         <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
@@ -333,16 +390,19 @@ function App() {
       title: 'Documentação UX',
       description: 'Visão geral das experiências, requisitos e decisões de interface do gestor de tarefas.',
       status: 'Atualizado',
+      href: '/docs/documentacao-ux-2026-09-21.md',
     },
     {
       title: 'Especificações iniciais',
       description: 'Requisitos iniciais do projeto, regras de negócio e critérios de priorização da operação.',
       status: 'Base do produto',
+      href: '/docs/Especifica%C3%A7%C3%B5es-iniciais',
     },
     {
       title: 'Checklist de implementação',
       description: 'Pendências e próximos passos para evoluir o produto com mais estabilidade e UX.',
       status: 'Em andamento',
+      href: '/docs/checklist-de-implementacao.md',
     },
   ]
 
@@ -359,7 +419,7 @@ function App() {
 
       <div className="report-grid">
         {documentCards.map((document) => (
-          <article className="report-card" key={document.title}>
+          <a className="report-card document-card" key={document.title} href={document.href} target="_blank" rel="noreferrer">
             <div className="report-card-heading">
               <div>
                 <h2>{document.title}</h2>
@@ -370,7 +430,7 @@ function App() {
             <div className="filter-summary">
               <span>Contexto operacional</span>
             </div>
-          </article>
+          </a>
         ))}
       </div>
     </section>
@@ -556,7 +616,33 @@ function App() {
               <h2>Atividade recente</h2>
               <p>Últimas atualizações do time.</p>
             </div>
-            <button className="icon-button"><MoreHorizontal size={17} /></button>
+            <div className="activity-menu-wrap" ref={activityMenuRef}>
+              <button
+                className="icon-button"
+                aria-label="Mais opções de atividade"
+                aria-expanded={activityMenuOpen}
+                onClick={() => setActivityMenuOpen((current) => !current)}
+              >
+                <MoreHorizontal size={17} />
+              </button>
+              {activityMenuOpen && (
+                <div className="local-popover activity-popover" role="menu">
+                  <button role="menuitem" onClick={() => {
+                    handleNavClick('Histórico')
+                    setActivityMenuOpen(false)
+                  }}>
+                    <Clock3 size={15} /> Ver histórico completo
+                  </button>
+                  <button role="menuitem" onClick={() => {
+                    exportActivitiesCsv(activities)
+                    setActivityMenuOpen(false)
+                    showToast('Histórico exportado em CSV')
+                  }}>
+                    <Download size={15} /> Exportar atividades CSV
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {activities.slice(0, 5).map((activity) => (
@@ -601,13 +687,41 @@ function App() {
           <span>Orbit</span>
         </div>
 
-        <div className="workspace-switcher">
-          <div className="workspace-avatar">OP</div>
-          <div>
-            <strong>Operação 2026</strong>
-            <span>Workspace principal</span>
-          </div>
-          <ChevronDown size={15} />
+        <div className="workspace-control" ref={workspaceMenuRef}>
+          <button
+            className="workspace-switcher"
+            aria-label={`Configurar workspace ${workspaceName}`}
+            aria-expanded={workspaceMenuOpen}
+            onClick={() => {
+              setWorkspaceDraft(workspaceName)
+              setWorkspaceMenuOpen((current) => !current)
+            }}
+          >
+            <span className="workspace-avatar">{workspaceInitials}</span>
+            <span className="workspace-switcher-copy">
+              <strong>{workspaceName}</strong>
+              <span>Workspace local</span>
+            </span>
+            <ChevronDown size={15} />
+          </button>
+          {workspaceMenuOpen && (
+            <form className="local-popover workspace-popover" onSubmit={(event) => {
+              event.preventDefault()
+              const nextName = workspaceDraft.trim()
+              if (!nextName) return
+              setWorkspaceName(nextName)
+              setWorkspaceMenuOpen(false)
+              showToast('Workspace atualizado neste navegador')
+            }}>
+              <strong>Workspace atual</strong>
+              <label>
+                Nome do espaço
+                <input value={workspaceDraft} onChange={(event) => setWorkspaceDraft(event.target.value)} maxLength={40} />
+              </label>
+              <small>Salvo apenas neste navegador.</small>
+              <button className="popover-primary" type="submit" disabled={!workspaceDraft.trim()}>Salvar workspace</button>
+            </form>
+          )}
         </div>
 
         <nav className="main-nav">
@@ -640,10 +754,9 @@ function App() {
           <div className="user-card">
             <div className="user-avatar">DR</div>
             <div>
-              <strong>Daniel Rocha</strong>
+              <strong>{profileName}</strong>
               <span>Administrador</span>
             </div>
-            <MoreHorizontal size={16} />
           </div>
         </div>
       </aside>
@@ -716,7 +829,37 @@ function App() {
                 </div>
               )}
             </div>
-            <button className="avatar-button">DR</button>
+            <div className="profile-menu-wrap" ref={profileMenuRef}>
+              <button
+                className="avatar-button"
+                aria-label="Editar perfil local"
+                aria-expanded={profileMenuOpen}
+                onClick={() => {
+                  setProfileDraft(profileName)
+                  setProfileMenuOpen((current) => !current)
+                }}
+              >
+                {profileInitials}
+              </button>
+              {profileMenuOpen && (
+                <form className="local-popover profile-popover" onSubmit={(event) => {
+                  event.preventDefault()
+                  const nextName = profileDraft.trim()
+                  if (!nextName) return
+                  setProfileName(nextName)
+                  setProfileMenuOpen(false)
+                  showToast('Perfil atualizado neste navegador')
+                }}>
+                  <strong>Perfil local</strong>
+                  <label>
+                    Nome exibido
+                    <input value={profileDraft} onChange={(event) => setProfileDraft(event.target.value)} maxLength={50} />
+                  </label>
+                  <small>Salvo apenas neste navegador.</small>
+                  <button className="popover-primary" type="submit" disabled={!profileDraft.trim()}>Salvar nome</button>
+                </form>
+              )}
+            </div>
           </div>
         </header>
 

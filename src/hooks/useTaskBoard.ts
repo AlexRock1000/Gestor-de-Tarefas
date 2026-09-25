@@ -227,14 +227,7 @@ export function useTaskBoard() {
   const [gutFilter, setGutFilter] = useState<GutFilter>('Todos')
   const [activeView, setActiveView] = useState('Minhas tarefas')
   const [search, setSearch] = useState('')
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
-    if (typeof window === 'undefined') {
-      return initialTasks[0].id
-    }
-
-    const stored = window.localStorage.getItem(`${storageKey}-selected`)
-    return stored ? Number(stored) || initialTasks[0].id : initialTasks[0].id
-  })
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
   const [copiedTaskId, setCopiedTaskId] = useState<number | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [isCreatingTask, setIsCreatingTask] = useState(false)
@@ -265,14 +258,8 @@ export function useTaskBoard() {
   }, [activities])
 
   useEffect(() => {
-    if (selectedTaskId !== null && typeof window !== 'undefined') {
-      window.localStorage.setItem(`${storageKey}-selected`, String(selectedTaskId))
-    }
-  }, [selectedTaskId])
-
-  useEffect(() => {
     if (selectedTaskId !== null && !tasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskId(tasks[0]?.id ?? null)
+      setSelectedTaskId(null)
     }
   }, [selectedTaskId, tasks])
 
