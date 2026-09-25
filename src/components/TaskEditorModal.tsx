@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { Phase, Status, Task } from '../types'
 
@@ -24,6 +25,17 @@ export function TaskEditorModal({
   dueToInputValue,
   inputValueToDue,
 }: TaskEditorModalProps) {
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
+
+  useEffect(() => {
+    titleInputRef.current?.focus()
+    titleInputRef.current?.select()
+  }, [editingTask.id, isCreatingTask])
+
+  const titleError = !editingTask.title.trim()
+  const responsibleError = !editingTask.responsible.trim()
+  const saveDisabled = titleError || responsibleError
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-card" onClick={(event) => event.stopPropagation()}>
@@ -40,7 +52,13 @@ export function TaskEditorModal({
         <div className="modal-body">
           <label className="field">
             <span>Título</span>
-            <input value={editingTask.title} onChange={(event) => onFieldChange('title', event.target.value)} />
+            <input
+              ref={titleInputRef}
+              value={editingTask.title}
+              onChange={(event) => onFieldChange('title', event.target.value)}
+              aria-invalid={titleError}
+            />
+            {titleError && <small className="field-error">Informe um título para salvar a tarefa.</small>}
           </label>
 
           <div className="modal-grid">
@@ -75,7 +93,12 @@ export function TaskEditorModal({
 
             <label className="field">
               <span>Responsável</span>
-              <input value={editingTask.responsible} onChange={(event) => onFieldChange('responsible', event.target.value)} />
+              <input
+                value={editingTask.responsible}
+                onChange={(event) => onFieldChange('responsible', event.target.value)}
+                aria-invalid={responsibleError}
+              />
+              {responsibleError && <small className="field-error">Informe quem será responsável pela tarefa.</small>}
             </label>
           </div>
 
@@ -123,7 +146,9 @@ export function TaskEditorModal({
 
         <div className="modal-footer">
           <button className="secondary-button" onClick={onClose}>Cancelar</button>
-          <button className="primary-button" onClick={onSave}>{isCreatingTask ? 'Criar tarefa' : 'Salvar alterações'}</button>
+          <button className="primary-button" onClick={onSave} disabled={saveDisabled} aria-disabled={saveDisabled}>
+            {isCreatingTask ? 'Criar tarefa' : 'Salvar alterações'}
+          </button>
         </div>
       </div>
     </div>
