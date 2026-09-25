@@ -2,18 +2,22 @@ import { useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight,
   Bell,
+  CalendarDays,
   Check,
+  CheckCircle2,
   ChevronDown,
   Clipboard,
   Clock3,
   Download,
   FileText,
   LayoutDashboard,
+  ListTodo,
   ListChecks,
   MoonStar,
   MoreHorizontal,
   Plus,
   Search,
+  SlidersHorizontal,
   Sparkles,
   SunMedium,
   Target,
@@ -35,6 +39,7 @@ import {
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -134,7 +139,16 @@ function App() {
     return () => window.clearTimeout(timer)
   }, [toast])
 
+  useEffect(() => {
+    document.querySelector('.main-content')?.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [activeView])
+
   const showToast = (message: string) => setToast(message)
+  const selectTaskFilter = (filter: 'Todos' | 'Hoje' | 'Urgentes' | 'Concluídas') => {
+    clearFilters()
+    setQuickFilter(filter)
+    handleNavClick('Minhas tarefas')
+  }
 
   const handleSaveEditedTask = () => {
     if (!editingTask) {
@@ -415,9 +429,13 @@ function App() {
     <div className="workspace-grid">
       <section className="tasks-panel">
         <div className="panel-header">
-          <div>
-            <h2>Minhas tarefas</h2>
-            <p>Prioridades para manter o plano em movimento.</p>
+          <div className="tasks-heading-row">
+            <div>
+              <p className="eyebrow">SEU ESPAÇO DE TRABALHO</p>
+              <h2>Minhas tarefas</h2>
+              <p>Escolha uma tarefa e avance no seu ritmo.</p>
+            </div>
+            <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
           </div>
 
           <div className="filter-group">
@@ -439,23 +457,32 @@ function App() {
                   {item.value === 'Concluídas' && <strong>{tasks.filter((task) => task.status === 'Concluído').length}</strong>}
                 </button>
               ))}
+              <button
+                className={`quick-action filter-toggle ${filtersExpanded ? 'active' : ''}`}
+                onClick={() => setFiltersExpanded((current) => !current)}
+                aria-expanded={filtersExpanded}
+              >
+                <SlidersHorizontal size={14} />
+                Mais filtros
+              </button>
             </div>
 
-            <div className="filter-tabs">
-              <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas</button>
-              {phases.map((phase) => (
-                <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
-              ))}
-            </div>
+            {filtersExpanded && <div className="filters-expanded">
+              <div className="filter-tabs">
+                <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
+                {phases.map((phase) => (
+                  <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
+                ))}
+              </div>
 
-            <div className="status-tabs">
-              <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos</button>
-              {statusOrder.map((status) => (
-                <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
-              ))}
-            </div>
+              <div className="status-tabs">
+                <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
+                {statusOrder.map((status) => (
+                  <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                ))}
+              </div>
 
-            <div className="advanced-filters">
+              <div className="advanced-filters">
               <label>
                 Responsável
                 <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
@@ -482,7 +509,8 @@ function App() {
                   <option value="Baixas (até 49)">Baixas</option>
                 </select>
               </label>
-            </div>
+              </div>
+            </div>}
 
             <div className="filter-summary">
               <span>{visibleTasks.length} de {tasks.length} tarefas</span>
@@ -562,8 +590,8 @@ function App() {
     <div className={`app-shell ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-mark"><Sparkles size={17} /></div>
-          <span>orbit</span>
+          <div className="brand-mark"><ListChecks size={18} /></div>
+          <span>Orbit</span>
         </div>
 
         <div className="workspace-switcher">
@@ -576,15 +604,20 @@ function App() {
         </div>
 
         <nav className="main-nav">
-          <p className="nav-label">Workspace</p>
+          <p className="nav-label">Menu</p>
           <button className={activeView === 'Visão geral' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Visão geral')}><LayoutDashboard size={17} /> Visão geral</button>
           <button className={activeView === 'Quadro' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Quadro')}><Target size={17} /> Quadro Kanban <span className="nav-count">{tasks.length}</span></button>
-          <button className={activeView === 'Checklists' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Checklists')}><ListChecks size={17} /> Checklists</button>
-          <button className={activeView === 'Prompts IA' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Prompts IA')}><Sparkles size={17} /> Prompts IA <span className="new-pill">novo</span></button>
-
-          <p className="nav-label second">Organização</p>
           <button className={activeView === 'Documentos' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Documentos')}><FileText size={17} /> Documentos</button>
           <button className={activeView === 'Histórico' ? 'nav-item active' : 'nav-item'} onClick={() => handleNavClick('Histórico')}><Clock3 size={17} /> Histórico</button>
+
+          <div className="library-heading">
+            <p className="nav-label second">Sua biblioteca</p>
+            <button className="library-add" onClick={addTask} aria-label="Criar tarefa"><Plus size={17} /></button>
+          </div>
+          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Todos' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Todos')}><ListTodo size={17} /> Todas as tarefas <span className="nav-count">{tasks.length}</span></button>
+          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Hoje' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Hoje')}><CalendarDays size={17} /> Para hoje</button>
+          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Urgentes' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Urgentes')}><Bell size={17} /> Prioritárias <span className="nav-count">{tasks.filter((task) => task.scoreGut >= 80 || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</span></button>
+          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Concluídas' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Concluídas')}><CheckCircle2 size={17} /> Concluídas</button>
         </nav>
 
         <div className="sidebar-bottom">
@@ -611,9 +644,8 @@ function App() {
       <main className="main-content">
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Workspace</span>
-            <span>/</span>
-            <strong>{activeView}</strong>
+            <button className="top-home" onClick={() => handleNavClick('Visão geral')} aria-label="Ir para visão geral"><LayoutDashboard size={17} /></button>
+            <strong>{activeView === 'Minhas tarefas' ? 'Sua biblioteca' : activeView}</strong>
           </div>
 
           <div className="top-actions">
@@ -623,7 +655,7 @@ function App() {
                 ref={searchInputRef}
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar tarefa..."
+                placeholder="O que você precisa fazer?"
               />
               <kbd>⌘ K</kbd>
             </div>
