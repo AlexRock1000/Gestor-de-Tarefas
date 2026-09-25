@@ -188,11 +188,17 @@ function App() {
     showToast(nextStatus === 'Concluído' ? 'Tarefa concluída' : 'Tarefa reaberta')
   }
 
+  const todayLabel = new Date()
+    .toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+    .toUpperCase()
+  const completedTasksCount = tasks.filter((task) => task.status === 'Concluído').length
+  const overdueTasksCount = tasks.filter((task) => getDueState(task.due, task.status) === 'overdue').length
+
   const renderOverview = () => (
     <>
       <section className="hero-row">
         <div>
-          <p className="eyebrow">QUINTA-FEIRA, 17 DE SETEMBRO</p>
+          <p className="eyebrow">{todayLabel}</p>
           <h1>Bom dia, Daniel <span>✦</span></h1>
           <p className="hero-subtitle">Aqui está o pulso da sua operação hoje.</p>
         </div>
@@ -205,7 +211,7 @@ function App() {
           <strong>{totalProgress}%</strong>
           <div className="metric-foot">
             <div className="progress-track light"><span style={{ width: `${totalProgress}%` }} /></div>
-            <span>+8,4% <small>esta semana</small></span>
+            <span>{completedTasksCount} de {tasks.length} <small>concluídas</small></span>
           </div>
         </div>
 
@@ -222,9 +228,9 @@ function App() {
         </div>
 
         <div className="metric-card">
-          <div className="metric-top"><span>Em dia</span><Check size={17} /></div>
-          <strong>{tasks.length ? Math.max(0, 100 - Math.round((highPriorityCount / tasks.length) * 100)) : 0}%</strong>
-          <div className="metric-caption">tarefas dentro do calendário</div>
+          <div className="metric-top"><span>Atrasadas</span><Clock3 size={17} /></div>
+          <strong>{overdueTasksCount}</strong>
+          <div className="metric-caption">tarefas com prazo vencido</div>
         </div>
       </section>
 
