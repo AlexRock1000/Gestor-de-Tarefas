@@ -183,9 +183,10 @@ function App() {
       return
     }
 
-    const nextStatus = task.status === 'Concluído' ? 'Pendente' : 'Concluído'
+    const currentStatusIndex = statusOrder.indexOf(task.status)
+    const nextStatus = statusOrder[(currentStatusIndex + 1) % statusOrder.length]
     updateStatus(taskId, nextStatus)
-    showToast(nextStatus === 'Concluído' ? 'Tarefa concluída' : 'Tarefa reaberta')
+    showToast(`Status atualizado para ${nextStatus}`)
   }
 
   const todayLabel = new Date()
@@ -732,6 +733,8 @@ function App() {
           task={selectedTask}
           copiedTaskId={copiedTaskId}
           statusOrder={statusOrder}
+          dueToInputValue={dueToInputValue}
+          inputValueToDue={inputValueToDue}
           onClose={() => setSelectedTaskId(null)}
           onDeleteTask={handleDeleteSelectedTask}
           onCopyPrompt={(task) => void copyPrompt(task)}

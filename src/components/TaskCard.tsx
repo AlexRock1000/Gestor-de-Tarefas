@@ -38,15 +38,18 @@ export function TaskCard({
       role="button"
       aria-label={`Abrir tarefa ${task.title}`}
     >
-      <div
+      <button
+        type="button"
         className={`task-status ${task.status === 'Concluído' ? 'done' : task.status === 'Em Andamento' ? 'progress' : ''}`}
+        aria-label={`Avançar status de ${task.title}; atual: ${task.status}`}
+        title="Avançar status"
         onClick={(event) => {
           event.stopPropagation()
           onToggleStatus(task.id)
         }}
       >
         {task.status === 'Concluído' && <Check size={13} />}
-      </div>
+      </button>
 
       <div className="task-info">
         <strong>{task.title}</strong>
