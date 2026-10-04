@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -231,6 +231,17 @@ function App() {
     setSelectedTaskId(null)
   }
 
+  const handleImportTasks = async (event: ChangeEvent<HTMLInputElement>) => {
+    try {
+      const importedCount = await importTasks(event)
+      showToast(importedCount
+        ? `${importedCount} tarefa${importedCount === 1 ? '' : 's'} importada${importedCount === 1 ? '' : 's'}`
+        : 'O CSV não contém tarefas para importar')
+    } catch (error) {
+      showToast(error instanceof Error ? `Falha ao importar CSV: ${error.message}` : 'Falha ao importar CSV')
+    }
+  }
+
   const handleToggleTaskStatus = (taskId: number) => {
     const task = tasks.find((item) => item.id === taskId)
     if (!task) {
@@ -299,7 +310,7 @@ function App() {
         </div>
         <div className="report-actions">
           <label className="text-button" htmlFor="task-import"><Upload size={15} /> Importar CSV</label>
-          <input id="task-import" className="file-input" type="file" accept=".csv,text/csv" onChange={importTasks} />
+          <input id="task-import" className="file-input" type="file" accept=".csv,text/csv" onChange={(event) => void handleImportTasks(event)} />
           <button className="text-button" onClick={exportTasks}>Exportar CSV <Download size={15} /></button>
         </div>
       </div>
@@ -371,14 +382,19 @@ function App() {
         <span className="history-count">{activities.length} eventos</span>
       </div>
 
-      <div className="history-list">
+      {!activities.length ? (
+        <div className="empty-state">
+          <strong>Nenhuma atividade registrada</strong>
+          <span>As ações realizadas nas tarefas aparecerão aqui.</span>
+        </div>
+      ) : <div className="history-list">
         {activities.map((activity) => (
           <article className="history-item" key={activity.id}>
             <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
             <div className="history-item-copy">
               <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
               <span>{activity.time}</span>
-            </div>
+            </div>}
           </article>
         ))}
       </div>
