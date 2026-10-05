@@ -387,17 +387,19 @@ function App() {
           <strong>Nenhuma atividade registrada</strong>
           <span>As ações realizadas nas tarefas aparecerão aqui.</span>
         </div>
-      ) : <div className="history-list">
-        {activities.map((activity) => (
-          <article className="history-item" key={activity.id}>
-            <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
-            <div className="history-item-copy">
-              <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
-              <span>{activity.time}</span>
-            </div>}
-          </article>
-        ))}
-      </div>
+      ) : (
+        <div className="history-list">
+          {activities.map((activity) => (
+            <article className="history-item" key={activity.id}>
+              <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
+              <div className="history-item-copy">
+                <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
+                <span>{activity.time}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   )
 
@@ -550,50 +552,52 @@ function App() {
               </button>
             </div>
 
-            {filtersExpanded && <div className="filters-expanded">
-              <div className="filter-tabs">
-                <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
-                {phases.map((phase) => (
-                  <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
-                ))}
-              </div>
-
-              <div className="status-tabs">
-                <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
-                {statusOrder.map((status) => (
-                  <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
-                ))}
-              </div>
-
-              <div className="advanced-filters">
-              <label>
-                Responsável
-                <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
-                  <option value="Todos">Todos</option>
-                  {responsibleOptions.map((responsible) => (
-                    <option key={responsible} value={responsible}>{responsible}</option>
+            {filtersExpanded && (
+              <div className="filters-expanded">
+                <div className="filter-tabs">
+                  <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
+                  {phases.map((phase) => (
+                    <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
                   ))}
-                </select>
-              </label>
-              <label>
-                Prazo
-                <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as any)}>
-                  <option value="Todos">Todos</option>
-                  <option value="Em aberto">Em aberto</option>
-                  <option value="Concluídas">Concluídas</option>
-                </select>
-              </label>
-              <label>
-                Prioridade
-                <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as any)}>
-                  <option value="Todos">Todas</option>
-                  <option value="Críticas (80+)">Críticas</option>
-                  <option value="Altas (50-79)">Altas</option>
-                  <option value="Baixas (até 49)">Baixas</option>
-                </select>
-              </label>
+                </div>
+
+                <div className="status-tabs">
+                  <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
+                  {statusOrder.map((status) => (
+                    <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                  ))}
+                </div>
+
+                <div className="advanced-filters">
+                  <label>
+                    Responsável
+                    <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
+                      <option value="Todos">Todos</option>
+                      {responsibleOptions.map((responsible) => (
+                        <option key={responsible} value={responsible}>{responsible}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Prazo
+                    <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as any)}>
+                      <option value="Todos">Todos</option>
+                      <option value="Em aberto">Em aberto</option>
+                      <option value="Concluídas">Concluídas</option>
+                    </select>
+                  </label>
+                  <label>
+                    Prioridade
+                    <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as any)}>
+                      <option value="Todos">Todas</option>
+                      <option value="Críticas (80+)">Críticas</option>
+                      <option value="Altas (50-79)">Altas</option>
+                      <option value="Baixas (até 49)">Baixas</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-            </div>}
+            )}
 
             <div className="filter-summary">
               <span>{visibleTasks.length} de {tasks.length} tarefas</span>

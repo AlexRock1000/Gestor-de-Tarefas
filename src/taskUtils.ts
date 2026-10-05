@@ -118,6 +118,8 @@ export const computeScore = (gravidade: number, urgencia: number, tendencia: num
 
 export const getDueState = (due: string, status: string, referenceDate = new Date()): DueState => {
   if (status === 'Concluído' || due === 'Concluída') return 'completed'
+  if (due === 'Hoje') return 'today'
+
   const dueDate = parseDueDate(due, referenceDate)
   if (!dueDate) return 'undated'
 

@@ -187,6 +187,27 @@ export const initialTasks: Task[] = [
 
 const storageKey = 'gestor-de-tarefas-v1'
 const activityStorageKey = `${storageKey}-activity`
+const API_BASE_URL = '/api'
+
+const apiRequest = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers ?? {}),
+    },
+    ...options,
+  })
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json() as Promise<T>
+}
 
 const initialActivities: Activity[] = [
   { id: 1, actor: 'Daniel', tone: 'teal', message: 'concluiu', taskTitle: 'Centralizar POPs', time: 'Há 24 min' },
@@ -306,34 +327,57 @@ export function useTaskBoard() {
       )
     : 0
 
-  const updateTask = (taskId: number, updates: Partial<Task>) => {
+  const updateTask = async (taskId: number, updates: Partial<Task>) => {
+    const currentTask = tasks.find((task) => task.id === taskId)
+    if (!currentTask) {
+      return
+    }
+
+    const nextGravidade = updates.gravidade ?? currentTask.gravidade
+    const nextUrgencia = updates.urgencia ?? currentTask.urgencia
+    const nextTendencia = updates.tendencia ?? currentTask.tendencia
+    const nextTask = {
+      ...currentTask,
+      ...updates,
+      scoreGut: computeScore(nextGravidade, nextUrgencia, nextTendencia),
+    }
+
     setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        const nextGravidade = updates.gravidade ?? task.gravidade
-        const nextUrgencia = updates.urgencia ?? task.urgencia
-        const nextTendencia = updates.tendencia ?? task.tendencia
-
-        return {
-          ...task,
-          ...updates,
-          scoreGut: computeScore(nextGravidade, nextUrgencia, nextTendencia),
-        }
-      }),
+      current.map((task) => (task.id === taskId ? nextTask : task)),
     )
+
+    try {
+      await apiRequest<Task>(`/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(nextTask),
+      })
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((task) => (task.id === taskId ? nextTask : task))))
+      }
+    }
   }
 
-  const updateStatus = (id: number, status: Status) => {
+  const updateStatus = async (id: number, status: Status) => {
     const task = tasks.find((item) => item.id === id)
     if (!task) {
       return
     }
 
     const nextDue = resolveDueForStatus(status, task.due)
-    updateTask(id, { status, due: nextDue })
+    const nextTask = { ...task, status, due: nextDue }
+    setTasks((current) => current.map((item) => (item.id === id ? nextTask : item)))
+
+    try {
+      await apiRequest<Task>(`/tasks/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(nextTask),
+      })
+    } catch {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((item) => (item.id === id ? nextTask : item))))
+      }
+    }
 
     if (task.status !== status) {
       setActivities((current) => [
@@ -408,15 +452,25 @@ export function useTaskBoard() {
     setEditingTask(newTask)
   }
 
-  const deleteTask = (taskId: number) => {
+  const deleteTask = async (taskId: number) => {
+    const task = tasks.find((item) => item.id === taskId)
     setTasks((current) => {
-      const nextTasks = current.filter((task) => task.id !== taskId)
+      const nextTasks = current.filter((taskItem) => taskItem.id !== taskId)
       if (selectedTaskId === taskId) {
         setSelectedTaskId(nextTasks[0]?.id ?? null)
       }
       return nextTasks
     })
-    const task = tasks.find((item) => item.id === taskId)
+
+    try {
+      await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' })
+    } catch {
+      if (typeof window !== 'undefined') {
+        const nextTasks = tasks.filter((taskItem) => taskItem.id !== taskId)
+        window.localStorage.setItem(storageKey, JSON.stringify(nextTasks))
+      }
+    }
+
     if (task) {
       setActivities((current) => [
         { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'removeu', taskTitle: task.title, time: 'Agora' },
@@ -636,7 +690,7 @@ export function useTaskBoard() {
     return importedTasks.length
   }
 
-  const saveEditedTask = () => {
+  const saveEditedTask = async () => {
     if (!editingTask) {
       return
     }
@@ -662,18 +716,43 @@ export function useTaskBoard() {
       ),
     }
 
-    if (isCreatingTask) {
-      setTasks((current) => [...current, normalizedTask])
-    } else {
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === normalizedTask.id
-            ? { ...task, ...normalizedTask }
-            : task,
-        ),
-      )
+    try {
+      if (isCreatingTask) {
+        const createdTask = await apiRequest<Task>('/tasks', {
+          method: 'POST',
+          body: JSON.stringify(normalizedTask),
+        })
+        setTasks((current) => [...current, createdTask])
+        setSelectedTaskId(createdTask.id)
+      } else {
+        const updatedTask = await apiRequest<Task>(`/tasks/${normalizedTask.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(normalizedTask),
+        })
+        setTasks((current) =>
+          current.map((task) =>
+            task.id === updatedTask.id
+              ? { ...task, ...updatedTask }
+              : task,
+          ),
+        )
+        setSelectedTaskId(updatedTask.id)
+      }
+    } catch {
+      if (isCreatingTask) {
+        setTasks((current) => [...current, normalizedTask])
+      } else {
+        setTasks((current) =>
+          current.map((task) =>
+            task.id === normalizedTask.id
+              ? { ...task, ...normalizedTask }
+              : task,
+          ),
+        )
+      }
+      setSelectedTaskId(normalizedTask.id)
     }
-    setSelectedTaskId(normalizedTask.id)
+
     setEditingTask(null)
     setIsCreatingTask(false)
     setActivities((current) => [
@@ -759,8 +838,8 @@ export function useTaskBoard() {
     updateTask(taskId, { [field]: value } as Partial<Task>)
   }
 
-  const saveTaskChanges = (task: Task) => {
-    updateTask(task.id, task)
+  const saveTaskChanges = async (task: Task) => {
+    await updateTask(task.id, task)
   }
 
   return {
