@@ -7,6 +7,8 @@ type TaskDetailDrawerProps = {
   task: Task
   copiedTaskId: number | null
   statusOrder: Status[]
+  dueToInputValue: (due: string) => string
+  inputValueToDue: (value: string) => string
   onClose: () => void
   onDeleteTask: () => void
   onCopyPrompt: (task: Task) => void
@@ -18,6 +20,8 @@ export function TaskDetailDrawer({
   task,
   copiedTaskId,
   statusOrder,
+  dueToInputValue,
+  inputValueToDue,
   onClose,
   onDeleteTask,
   onCopyPrompt,
@@ -71,13 +75,23 @@ export function TaskDetailDrawer({
         {task.observacoes || 'Organize os próximos passos e acompanhe o avanço desta frente operacional.'}
       </p>
 
-      <div className="drawer-status">
-        <span>Status</span>
-        <select value={draftTask.status} onChange={(event) => updateDraftStatus(event.target.value as Status)}>
-          {statusOrder.map((status) => (
-            <option key={status} value={status}>{status}</option>
-          ))}
-        </select>
+      <div className="drawer-quick-fields">
+        <label className="drawer-status">
+          <span>Status</span>
+          <select value={draftTask.status} onChange={(event) => updateDraftStatus(event.target.value as Status)}>
+            {statusOrder.map((status) => (
+              <option key={status} value={status}>{status}</option>
+            ))}
+          </select>
+        </label>
+        <label className="drawer-status">
+          <span>Prazo</span>
+          <input
+            type="date"
+            value={dueToInputValue(draftTask.due)}
+            onChange={(event) => updateDraft('due', inputValueToDue(event.target.value))}
+          />
+        </label>
       </div>
 
       <div className="drawer-meta-grid">

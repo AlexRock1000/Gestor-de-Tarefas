@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { computeScore, getDueState, getPriorityBand, getPriorityLabel, resolveDueForStatus } from './taskUtils'
+import {
+  computeScore,
+  formatDueDate,
+  getDueState,
+  getPriorityBand,
+  getPriorityLabel,
+  normalizeDueDate,
+  parseCsv,
+  resolveDueForStatus,
+} from './taskUtils'
 
 describe('computeScore', () => {
   it('multiplica gravidade, urgência e tendência', () => {
@@ -20,6 +29,30 @@ describe('getDueState', () => {
     expect(getDueState('16 set', 'Pendente', referenceDate)).toBe('overdue')
     expect(getDueState('24 set', 'Pendente', referenceDate)).toBe('upcoming')
     expect(getDueState('Sem prazo', 'Pendente', referenceDate)).toBe('undated')
+  })
+
+  it('respeita o ano da data e valida datas ISO', () => {
+    expect(getDueState('2027-09-16', 'Pendente', referenceDate)).toBe('upcoming')
+    expect(getDueState('2025-09-16', 'Pendente', referenceDate)).toBe('overdue')
+    expect(getDueState('2026-02-30', 'Pendente', referenceDate)).toBe('undated')
+  })
+
+  it('normaliza datas antigas com o ano de referência e exibe o ano', () => {
+    expect(normalizeDueDate('24 set', referenceDate)).toBe('2026-09-24')
+    expect(formatDueDate('2027-09-24', referenceDate)).toBe('24 set 2027')
+  })
+})
+
+describe('parseCsv', () => {
+  it('handles quoted delimiters, escaped quotes and multiline fields', () => {
+    expect(parseCsv('Tarefa;Anotações\r\n"Conferir; revisar";"Disse ""ok""\nequipe"')).toEqual([
+      ['Tarefa', 'Anotações'],
+      ['Conferir; revisar', 'Disse "ok"\nequipe'],
+    ])
+  })
+
+  it('rejects unclosed quoted fields', () => {
+    expect(() => parseCsv('Tarefa;Notas\n"Sem fechamento;valor')).toThrow('aspas sem fechamento')
   })
 })
 

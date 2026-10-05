@@ -1,5 +1,5 @@
 import { Check, Clipboard } from 'lucide-react'
-import { getDueState, getPriorityBand } from '../taskUtils'
+import { formatDueDate, getDueState, getPriorityBand } from '../taskUtils'
 import type { Task } from '../types'
 
 type TaskCardProps = {
@@ -38,15 +38,18 @@ export function TaskCard({
       role="button"
       aria-label={`Abrir tarefa ${task.title}`}
     >
-      <div
+      <button
+        type="button"
         className={`task-status ${task.status === 'Concluído' ? 'done' : task.status === 'Em Andamento' ? 'progress' : ''}`}
+        aria-label={`Avançar status de ${task.title}; atual: ${task.status}`}
+        title="Avançar status"
         onClick={(event) => {
           event.stopPropagation()
           onToggleStatus(task.id)
         }}
       >
         {task.status === 'Concluído' && <Check size={13} />}
-      </div>
+      </button>
 
       <div className="task-info">
         <strong>{task.title}</strong>
@@ -64,7 +67,7 @@ export function TaskCard({
       <div className="task-priority">
         <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>GUT {task.scoreGut}</span>
         <span className={`due-date ${dueState}`}>
-          <span>{task.due}</span>
+          <span>{formatDueDate(task.due)}</span>
           <small>{dueState === 'overdue' ? 'Atrasada' : dueState === 'today' ? 'Vence hoje' : dueState === 'upcoming' ? 'No prazo' : dueState === 'completed' ? 'Concluída' : 'Sem prazo'}</small>
         </span>
       </div>

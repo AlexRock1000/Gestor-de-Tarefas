@@ -1,14 +1,18 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import {
   computeScore,
+  formatLocalDate,
   getDueState,
+  parseCsv,
   getPriorityBand,
   getPriorityLabel,
+  normalizeDueDate,
   resolveDueForStatus,
   type DueState,
 } from '../taskUtils'
 import type {
   Activity,
+  ChecklistItem,
   DeadlineFilter,
   GutFilter,
   Phase,
@@ -36,23 +40,14 @@ export const dueStateLabels: Record<DueState, string> = {
 }
 
 export const dueToInputValue = (due: string) => {
-  if (due === 'Hoje') {
-    return new Date().toISOString().slice(0, 10)
-  }
-
-  const match = due.toLowerCase().match(/^(\d{1,2})\s+([a-zç]+)$/)
-  if (!match) return ''
-  const month = monthLabels.indexOf(match[2].slice(0, 3))
-  if (month < 0) return ''
-  return `${new Date().getFullYear()}-${String(month + 1).padStart(2, '0')}-${match[1].padStart(2, '0')}`
+  const normalized = normalizeDueDate(due)
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : ''
 }
 
 export const inputValueToDue = (value: string) => {
   if (!value) return 'Sem prazo'
   const selected = new Date(`${value}T00:00:00`)
-  const today = new Date()
-  if (selected.toDateString() === today.toDateString()) return 'Hoje'
-  return `${selected.getDate()} ${monthLabels[selected.getMonth()]}`
+  return Number.isNaN(selected.getTime()) ? 'Sem prazo' : formatLocalDate(selected)
 }
 
 const formatCreatedAt = (date: Date) => {
@@ -67,7 +62,7 @@ export const initialTasks: Task[] = [
     title: 'Mapear itens sem giro há 90 dias',
     phase: 'Estoque',
     status: 'Em Andamento',
-    due: 'Hoje',
+    due: formatLocalDate(new Date()),
     createdAt: '12 set',
     responsible: 'Daniel Rocha',
     gravidade: 5,
@@ -88,7 +83,7 @@ export const initialTasks: Task[] = [
     title: 'Definir política de inventário cíclico',
     phase: 'Estoque',
     status: 'Pendente',
-    due: '18 set',
+    due: '2026-09-18',
     createdAt: '14 set',
     responsible: 'Ana Maria',
     gravidade: 4,
@@ -109,7 +104,7 @@ export const initialTasks: Task[] = [
     title: 'Revisar contratos de fornecedores',
     phase: 'Documentação',
     status: 'Em Andamento',
-    due: '20 set',
+    due: '2026-09-20',
     createdAt: '10 set',
     responsible: 'Lucas Costa',
     gravidade: 4,
@@ -151,7 +146,7 @@ export const initialTasks: Task[] = [
     title: 'Desenhar fluxo de aprovação',
     phase: 'Processos',
     status: 'Pendente',
-    due: '24 set',
+    due: '2026-09-24',
     createdAt: '16 set',
     responsible: 'Bruno Souza',
     gravidade: 5,
@@ -172,7 +167,7 @@ export const initialTasks: Task[] = [
     title: 'Automatizar rotina de conferência',
     phase: 'Automações',
     status: 'Em Andamento',
-    due: '26 set',
+    due: '2026-09-26',
     createdAt: '15 set',
     responsible: 'Miguel Nunes',
     gravidade: 5,
@@ -213,7 +208,9 @@ export function useTaskBoard() {
 
     try {
       const parsed = JSON.parse(stored) as Task[]
-      return Array.isArray(parsed) && parsed.length ? parsed : initialTasks
+      return Array.isArray(parsed) && parsed.length
+        ? parsed.map((task) => ({ ...task, due: normalizeDueDate(task.due) }))
+        : initialTasks
     } catch {
       return initialTasks
     }
@@ -227,14 +224,7 @@ export function useTaskBoard() {
   const [gutFilter, setGutFilter] = useState<GutFilter>('Todos')
   const [activeView, setActiveView] = useState('Minhas tarefas')
   const [search, setSearch] = useState('')
-  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(() => {
-    if (typeof window === 'undefined') {
-      return initialTasks[0].id
-    }
-
-    const stored = window.localStorage.getItem(`${storageKey}-selected`)
-    return stored ? Number(stored) || initialTasks[0].id : initialTasks[0].id
-  })
+  const [selectedTaskId, setSelectedTaskId] = useState<number | null>(null)
   const [copiedTaskId, setCopiedTaskId] = useState<number | null>(null)
   const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [isCreatingTask, setIsCreatingTask] = useState(false)
@@ -265,14 +255,8 @@ export function useTaskBoard() {
   }, [activities])
 
   useEffect(() => {
-    if (selectedTaskId !== null && typeof window !== 'undefined') {
-      window.localStorage.setItem(`${storageKey}-selected`, String(selectedTaskId))
-    }
-  }, [selectedTaskId])
-
-  useEffect(() => {
     if (selectedTaskId !== null && !tasks.some((task) => task.id === selectedTaskId)) {
-      setSelectedTaskId(tasks[0]?.id ?? null)
+      setSelectedTaskId(null)
     }
   }, [selectedTaskId, tasks])
 
@@ -406,7 +390,7 @@ export function useTaskBoard() {
       title: 'Nova tarefa operacional',
       phase: nextPhase,
       status: 'Pendente',
-      due: '30 set',
+      due: 'Sem prazo',
       createdAt,
       responsible: 'Não atribuída',
       gravidade: 3,
@@ -498,14 +482,36 @@ export function useTaskBoard() {
 
   const exportTasks = () => {
     const escapeCsv = (value: string | number) => `"${String(value).replace(/"/g, '""')}"`
-    const headers = ['Tarefa', 'Fase', 'Status', 'Responsável', 'Prazo', 'Prioridade GUT', 'Estado do prazo']
+    const headers = [
+      'Tarefa',
+      'Fase',
+      'Status',
+      'Responsável',
+      'Prazo',
+      'Gravidade',
+      'Urgência',
+      'Tendência',
+      'Prioridade GUT',
+      'Tag',
+      'Checklist',
+      'Prompt de IA',
+      'Anotações',
+      'Estado do prazo',
+    ]
     const rows = visibleTasks.map((task) => [
       task.title,
       task.phase,
       task.status,
       task.responsible,
       task.due,
+      task.gravidade,
+      task.urgencia,
+      task.tendencia,
       task.scoreGut,
+      task.tag,
+      JSON.stringify(task.checklist),
+      task.promptIa,
+      task.observacoes,
       dueStateLabels[getDueState(task.due, task.status)],
     ])
     const csv = [headers, ...rows].map((row) => row.map(escapeCsv).join(';')).join('\n')
@@ -518,46 +524,116 @@ export function useTaskBoard() {
     URL.revokeObjectURL(url)
   }
 
-  const importTasks = async (event: ChangeEvent<HTMLInputElement>) => {
+  const importTasks = async (event: ChangeEvent<HTMLInputElement>): Promise<number> => {
     const file = event.target.files?.[0]
     event.target.value = ''
-    if (!file) return
+    if (!file) return 0
 
     const content = await file.text()
-    const lines = content.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean)
-    if (lines.length < 2) return
+    const rows = parseCsv(content)
+    if (rows.length < 2) throw new Error('O arquivo precisa conter cabeçalho e ao menos uma tarefa.')
 
-    const parseRow = (line: string) => line.split(';').map((value) => value.trim().replace(/^"|"$/g, '').replace(/""/g, '"'))
-    const importedTasks = lines.slice(1).map((line, index) => {
-      const [title, phaseValue, statusValue, responsible, due, gutValue] = parseRow(line)
-      const phase = phases.some((item) => item.name === phaseValue) ? phaseValue as Phase : 'Processos'
+    const normalizeHeader = (header: string) =>
+      header.trim().toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    const headers = rows[0].map(normalizeHeader)
+    const column = (name: string) => headers.indexOf(normalizeHeader(name))
+    const titleColumn = column('Tarefa')
+    if (titleColumn < 0) throw new Error('Não encontrei a coluna "Tarefa" no cabeçalho.')
+
+    const valueAt = (row: string[], name: string) => {
+      const index = column(name)
+      return index < 0 ? '' : row[index] ?? ''
+    }
+    const legacyGutFactors = (score: number) => {
+      for (let gravidade = 1; gravidade <= 5; gravidade += 1) {
+        for (let urgencia = 1; urgencia <= 5; urgencia += 1) {
+          for (let tendencia = 1; tendencia <= 5; tendencia += 1) {
+            if (computeScore(gravidade, urgencia, tendencia) === score) {
+              return { gravidade, urgencia, tendencia }
+            }
+          }
+        }
+      }
+      return null
+    }
+
+    const importedTasks = rows.slice(1).map((row, index) => {
+      if (row.length !== headers.length) {
+        throw new Error(`A linha ${index + 2} tem quantidade de colunas diferente do cabeçalho.`)
+      }
+      const title = row[titleColumn].trim()
+      if (!title) throw new Error(`A linha ${index + 2} está sem título de tarefa.`)
+
+      const phaseValue = valueAt(row, 'Fase')
+      const statusValue = valueAt(row, 'Status')
+      const phase = phases.find((item) => item.name === phaseValue)?.name ?? 'Processos'
       const status = statusOrder.includes(statusValue as Status) ? statusValue as Status : 'Pendente'
-      const scoreGut = Number(gutValue) || 27
+      const gutColumns = ['Gravidade', 'Urgência', 'Tendência'].map((name) => column(name))
+      let gut: { gravidade: number; urgencia: number; tendencia: number }
+      if (gutColumns.every((index) => index >= 0)) {
+        const values = gutColumns.map((index) => Number(row[index]))
+        if (values.some((value) => !Number.isInteger(value) || value < 1 || value > 5)) {
+          throw new Error(`A linha ${index + 2} tem valores GUT fora do intervalo de 1 a 5.`)
+        }
+        gut = { gravidade: values[0], urgencia: values[1], tendencia: values[2] }
+      } else {
+        const score = Number(valueAt(row, 'Prioridade GUT'))
+        const reconstructedGut = Number.isInteger(score) ? legacyGutFactors(score) : null
+        if (!reconstructedGut) {
+          throw new Error(`A linha ${index + 2} não tem fatores GUT válidos para reconstruir a prioridade.`)
+        }
+        gut = reconstructedGut
+      }
+
+      let checklist: ChecklistItem[] = [{ label: 'Definir próximo passo', done: false }]
+      const checklistValue = valueAt(row, 'Checklist')
+      if (checklistValue) {
+        let parsedChecklist: unknown
+        try {
+          parsedChecklist = JSON.parse(checklistValue)
+        } catch {
+          throw new Error(`O checklist da linha ${index + 2} não contém JSON válido.`)
+        }
+        if (
+          !Array.isArray(parsedChecklist) ||
+          !parsedChecklist.every((item) =>
+            typeof item === 'object' &&
+            item !== null &&
+            'label' in item &&
+            typeof item.label === 'string' &&
+            'done' in item &&
+            typeof item.done === 'boolean',
+          )
+        ) {
+          throw new Error(`O checklist da linha ${index + 2} tem formato inválido.`)
+        }
+        checklist = parsedChecklist as ChecklistItem[]
+      }
+
+      const due = valueAt(row, 'Prazo').trim() || 'Sem prazo'
       return {
         id: Date.now() + index,
-        title: title || 'Tarefa importada',
+        title,
         phase,
         status,
-        due: due || 'Sem prazo',
+        due: normalizeDueDate(due),
         createdAt: 'Importada',
-        responsible: responsible || 'Não atribuída',
-        gravidade: 3,
-        urgencia: 3,
-        tendencia: 3,
-        scoreGut,
-        tag: 'Importada',
-        checklist: [{ label: 'Definir próximo passo', done: false }],
-        promptIa: 'Estruture os próximos passos práticos para esta tarefa, considerando prioridade, risco e prazo.',
-        observacoes: 'Tarefa importada via CSV.',
+        responsible: valueAt(row, 'Responsável').trim() || 'Não atribuída',
+        ...gut,
+        scoreGut: computeScore(gut.gravidade, gut.urgencia, gut.tendencia),
+        tag: valueAt(row, 'Tag').trim() || 'Importada',
+        checklist,
+        promptIa: valueAt(row, 'Prompt de IA') || 'Estruture os próximos passos práticos para esta tarefa, considerando prioridade, risco e prazo.',
+        observacoes: valueAt(row, 'Anotações') || 'Tarefa importada via CSV.',
       } satisfies Task
-    }).filter((task) => task.title.trim())
+    })
 
-    if (!importedTasks.length) return
     setTasks((current) => [...current, ...importedTasks])
     setActivities((current) => [
       { id: Date.now(), actor: 'Daniel', tone: 'teal' as const, message: 'importou', taskTitle: `${importedTasks.length} tarefas via CSV`, time: 'Agora' },
       ...current,
     ].slice(0, 12))
+    return importedTasks.length
   }
 
   const saveEditedTask = () => {
