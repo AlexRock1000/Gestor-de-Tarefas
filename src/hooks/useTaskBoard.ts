@@ -265,6 +265,21 @@ export function useTaskBoard() {
 
   useEffect(() => {
     let isMounted = true
+    void apiRequest<Task[]>('/tasks')
+      .then((savedTasks) => {
+        if (isMounted) {
+          setTasks(savedTasks.map((task) => ({ ...task, due: normalizeDueDate(task.due) })))
+        }
+      })
+      .catch(() => undefined)
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
+    let isMounted = true
     void apiRequest<Activity[]>('/activities')
       .then((savedActivities) => {
         if (isMounted) setActivities(savedActivities)

@@ -109,7 +109,7 @@ export const listTasks = async (): Promise<Task[]> => {
 }
 
 export const findTask = async (id: number): Promise<Task | null> => {
-  const [rows] = await pool.execute<TaskRow[]>('SELECT * FROM tasks WHERE id = ?', [id])
+  const [rows] = await pool.query<TaskRow[]>('SELECT * FROM tasks WHERE id = ?', [id])
   return rows[0] ? mapTask(rows[0]) : null
 }
 
@@ -144,7 +144,7 @@ export const createTasks = async (tasks: TaskWrite[]): Promise<Task[]> => {
 
 export const updateTask = async (id: number, task: TaskWrite): Promise<Task | null> => {
   const assignments = columns.split(', ').map((column) => `${column} = ?`).join(', ')
-  const [result] = await pool.execute<ResultSetHeader>(`UPDATE tasks SET ${assignments} WHERE id = ?`, [...writeValues(task), id])
+  const [result] = await pool.query<ResultSetHeader>(`UPDATE tasks SET ${assignments} WHERE id = ?`, [...writeValues(task), id])
   return result.affectedRows ? { ...task, id } : null
 }
 
