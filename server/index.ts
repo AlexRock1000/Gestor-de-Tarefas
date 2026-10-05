@@ -1,7 +1,9 @@
 import cors from 'cors'
 import express from 'express'
+import { createActivity, listActivities, type ActivityTone } from './activityRepository'
 import { initializeDatabase, pool } from './db'
 import {
+  createTasks,
   createTask,
   deleteTask,
   findTask,
@@ -26,6 +28,29 @@ app.get('/api/health', async (_req, res) => {
 
 app.get('/api/tasks', async (_req, res) => {
   res.json(await listTasks())
+})
+
+app.get('/api/activities', async (_req, res) => {
+  res.json(await listActivities())
+})
+
+app.post('/api/activities', async (req, res) => {
+  const actor = String(req.body?.actor ?? '').trim()
+  const message = String(req.body?.message ?? '').trim()
+  const tone = req.body?.tone as ActivityTone
+  if (!actor || !message || !['teal', 'amber', 'coral'].includes(tone)) {
+    res.status(400).json({ message: 'Dados da atividade inválidos.' })
+    return
+  }
+
+  const activity = await createActivity({
+    actor,
+    tone,
+    message,
+    taskTitle: String(req.body?.taskTitle ?? ''),
+    time: String(req.body?.time ?? 'Agora'),
+  })
+  res.status(201).json(activity)
 })
 
 app.get('/api/tasks/:id', async (req, res) => {
@@ -66,6 +91,16 @@ app.post('/api/tasks', async (req, res) => {
   }
 
   const created = await createTask(newTask)
+  res.status(201).json(created)
+})
+
+app.post('/api/tasks/bulk', async (req, res) => {
+  if (!Array.isArray(req.body?.tasks) || req.body.tasks.some((task: unknown) => !task || typeof task !== 'object' || typeof (task as { title?: unknown }).title !== 'string')) {
+    res.status(400).json({ message: 'A lista de tarefas para importação é inválida.' })
+    return
+  }
+
+  const created = await createTasks(req.body.tasks as Omit<Task, 'id'>[])
   res.status(201).json(created)
 })
 

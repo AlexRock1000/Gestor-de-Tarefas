@@ -264,6 +264,19 @@ export function useTaskBoard() {
   })
 
   useEffect(() => {
+    let isMounted = true
+    void apiRequest<Activity[]>('/activities')
+      .then((savedActivities) => {
+        if (isMounted) setActivities(savedActivities)
+      })
+      .catch(() => undefined)
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(storageKey, JSON.stringify(tasks))
     }
@@ -358,6 +371,18 @@ export function useTaskBoard() {
     }
   }
 
+  const recordActivity = async (activity: Omit<Activity, 'id'>) => {
+    try {
+      const savedActivity = await apiRequest<Activity>('/activities', {
+        method: 'POST',
+        body: JSON.stringify(activity),
+      })
+      setActivities((current) => [savedActivity, ...current].slice(0, 12))
+    } catch {
+      setActivities((current) => [{ ...activity, id: Date.now() }, ...current].slice(0, 12))
+    }
+  }
+
   const updateStatus = async (id: number, status: Status) => {
     const task = tasks.find((item) => item.id === id)
     if (!task) {
@@ -380,17 +405,13 @@ export function useTaskBoard() {
     }
 
     if (task.status !== status) {
-      setActivities((current) => [
-        {
-          id: Date.now(),
-          actor: 'Daniel',
-          tone: (status === 'Concluído' ? 'teal' : 'amber') as Activity['tone'],
-          message: 'moveu para',
-          taskTitle: task.title,
-          time: 'Agora',
-        },
-        ...current,
-      ].slice(0, 12))
+      void recordActivity({
+        actor: 'Daniel',
+        tone: status === 'Concluído' ? 'teal' : 'amber',
+        message: 'moveu para',
+        taskTitle: task.title,
+        time: 'Agora',
+      })
     }
   }
 
@@ -404,26 +425,13 @@ export function useTaskBoard() {
 
   const toggleChecklist = (taskId: number, itemIndex: number) => {
     const task = tasks.find((item) => item.id === taskId)
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
+    if (!task || !task.checklist[itemIndex]) return
 
-        return {
-          ...task,
-          checklist: task.checklist.map((item, index) =>
-            index === itemIndex ? { ...item, done: !item.done } : item,
-          ),
-        }
-      }),
+    const checklist = task.checklist.map((item, index) =>
+      index === itemIndex ? { ...item, done: !item.done } : item,
     )
-    if (task) {
-      setActivities((current) => [
-        { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'atualizou o checklist de', taskTitle: task.title, time: 'Agora' },
-        ...current,
-      ].slice(0, 12))
-    }
+    void updateTask(taskId, { checklist })
+    void recordActivity({ actor: 'Daniel', tone: 'coral', message: 'atualizou o checklist de', taskTitle: task.title, time: 'Agora' })
   }
 
   const addTask = () => {
@@ -471,59 +479,28 @@ export function useTaskBoard() {
       }
     }
 
-    if (task) {
-      setActivities((current) => [
-        { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'removeu', taskTitle: task.title, time: 'Agora' },
-        ...current,
-      ].slice(0, 12))
-    }
+    if (task) void recordActivity({ actor: 'Daniel', tone: 'coral', message: 'removeu', taskTitle: task.title, time: 'Agora' })
   }
 
   const addChecklistItem = (taskId: number) => {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        return {
-          ...task,
-          checklist: [...task.checklist, { label: `Novo item ${task.checklist.length + 1}`, done: false }],
-        }
-      }),
-    )
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task) return
+    void updateTask(taskId, {
+      checklist: [...task.checklist, { label: `Novo item ${task.checklist.length + 1}`, done: false }],
+    })
   }
 
   const removeChecklistItem = (taskId: number, itemIndex: number) => {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        return {
-          ...task,
-          checklist: task.checklist.filter((_, index) => index !== itemIndex),
-        }
-      }),
-    )
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task) return
+    void updateTask(taskId, { checklist: task.checklist.filter((_, index) => index !== itemIndex) })
   }
 
   const updateChecklistLabel = (taskId: number, itemIndex: number, label: string) => {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        return {
-          ...task,
-          checklist: task.checklist.map((item, index) =>
-            index === itemIndex ? { ...item, label } : item,
-          ),
-        }
-      }),
-    )
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task || !task.checklist[itemIndex]) return
+    const checklist = task.checklist.map((item, index) => index === itemIndex ? { ...item, label } : item)
+    void updateTask(taskId, { checklist })
   }
 
   const copyPrompt = async (task: Task) => {
@@ -682,12 +659,13 @@ export function useTaskBoard() {
       } satisfies Task
     })
 
-    setTasks((current) => [...current, ...importedTasks])
-    setActivities((current) => [
-      { id: Date.now(), actor: 'Daniel', tone: 'teal' as const, message: 'importou', taskTitle: `${importedTasks.length} tarefas via CSV`, time: 'Agora' },
-      ...current,
-    ].slice(0, 12))
-    return importedTasks.length
+    const savedTasks = await apiRequest<Task[]>('/tasks/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ tasks: importedTasks }),
+    })
+    setTasks((current) => [...current, ...savedTasks])
+    void recordActivity({ actor: 'Daniel', tone: 'teal', message: 'importou', taskTitle: `${savedTasks.length} tarefas via CSV`, time: 'Agora' })
+    return savedTasks.length
   }
 
   const saveEditedTask = async () => {
@@ -755,17 +733,13 @@ export function useTaskBoard() {
 
     setEditingTask(null)
     setIsCreatingTask(false)
-    setActivities((current) => [
-      {
-        id: Date.now(),
-        actor: 'Daniel',
-        tone: isCreatingTask ? 'teal' as const : 'amber' as const,
-        message: isCreatingTask ? 'criou' : 'editou',
-        taskTitle: normalizedTask.title,
-        time: 'Agora',
-      },
-      ...current,
-    ].slice(0, 12))
+    void recordActivity({
+      actor: 'Daniel',
+      tone: isCreatingTask ? 'teal' : 'amber',
+      message: isCreatingTask ? 'criou' : 'editou',
+      taskTitle: normalizedTask.title,
+      time: 'Agora',
+    })
   }
 
   const phaseStats = phases.map((phase) => {

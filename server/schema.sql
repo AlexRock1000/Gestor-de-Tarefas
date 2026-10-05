@@ -22,3 +22,15 @@ CREATE TABLE IF NOT EXISTS tasks (
   CONSTRAINT chk_tasks_urgencia CHECK (urgencia BETWEEN 1 AND 5),
   CONSTRAINT chk_tasks_tendencia CHECK (tendencia BETWEEN 1 AND 5)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS activities (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  actor VARCHAR(100) NOT NULL,
+  tone ENUM('teal', 'amber', 'coral') NOT NULL DEFAULT 'teal',
+  message VARCHAR(255) NOT NULL,
+  taskTitle VARCHAR(255) NOT NULL DEFAULT '',
+  time VARCHAR(100) NOT NULL DEFAULT 'Agora',
+  createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  INDEX idx_activities_createdAt (createdAt)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -118,6 +118,30 @@ export const createTask = async (task: TaskWrite): Promise<Task> => {
   return { ...task, id: result.insertId }
 }
 
+export const createTasks = async (tasks: TaskWrite[]): Promise<Task[]> => {
+  if (!tasks.length) return []
+
+  const connection = await pool.getConnection()
+  try {
+    await connection.beginTransaction()
+    const createdTasks: Task[] = []
+    for (const task of tasks) {
+      const [result] = await connection.execute<ResultSetHeader>(
+        `INSERT INTO tasks (${columns}) VALUES (${values})`,
+        writeValues(task),
+      )
+      createdTasks.push({ ...task, id: result.insertId })
+    }
+    await connection.commit()
+    return createdTasks
+  } catch (error) {
+    await connection.rollback()
+    throw error
+  } finally {
+    connection.release()
+  }
+}
+
 export const updateTask = async (id: number, task: TaskWrite): Promise<Task | null> => {
   const assignments = columns.split(', ').map((column) => `${column} = ?`).join(', ')
   const [result] = await pool.execute<ResultSetHeader>(`UPDATE tasks SET ${assignments} WHERE id = ?`, [...writeValues(task), id])

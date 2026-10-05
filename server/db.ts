@@ -25,6 +25,9 @@ export const pool = mysql.createPool({
 export const initializeDatabase = async () => {
   const schemaUrl = new URL('./schema.sql', import.meta.url)
   const schema = await readFile(fileURLToPath(schemaUrl), 'utf8')
-  await pool.query(schema)
+  const statements = schema.split(';').map((statement) => statement.trim()).filter(Boolean)
+  for (const statement of statements) {
+    await pool.query(statement)
+  }
   await pool.query('SELECT 1')
 }
