@@ -32,17 +32,34 @@ export function TaskEditorModal({
     titleInputRef.current?.select()
   }, [editingTask.id, isCreatingTask])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+
+      if ((event.key === 'Enter' || event.key === 'NumpadEnter') && !(titleInputRef.current === document.activeElement && event.shiftKey)) {
+        if (!document.body.contains(document.activeElement) || document.activeElement instanceof HTMLElement && document.activeElement.tagName !== 'TEXTAREA') {
+          onSave()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, onSave])
+
   const titleError = !editingTask.title.trim()
   const responsibleError = !editingTask.responsible.trim()
   const saveDisabled = titleError || responsibleError
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="task-editor-title" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
             <p className="eyebrow">{isCreatingTask ? 'NOVA TAREFA' : 'EDIÇÃO DE TAREFA'}</p>
-            <h3>{isCreatingTask ? 'Configurar tarefa' : 'Detalhes da operação'}</h3>
+            <h3 id="task-editor-title">{isCreatingTask ? 'Configurar tarefa' : 'Detalhes da operação'}</h3>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Fechar modal">
             <X size={18} />
