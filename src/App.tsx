@@ -133,6 +133,10 @@ function App() {
     saveEditedTask,
     tasks,
     getDueState,
+    isLoadingTasks,
+    isLoadingActivities,
+    syncError,
+    syncFromServer,
   } = useTaskBoard()
 
   useEffect(() => {
@@ -782,6 +786,17 @@ function App() {
       </aside>
 
       <main className="main-content">
+        {(syncError || isLoadingTasks || isLoadingActivities) && (
+          <div className={`sync-banner ${syncError ? 'alert' : 'subtle'}`} role={syncError ? 'alert' : 'status'} aria-live="polite">
+            <span>
+              {syncError ?? (isLoadingTasks || isLoadingActivities ? 'Sincronizando tarefas e atividades...' : 'Dados atualizados.')}
+            </span>
+            {syncError && (
+              <button type="button" onClick={() => void syncFromServer()}>Tentar novamente</button>
+            )}
+          </div>
+        )}
+
         <header className="topbar">
           <div className="breadcrumb">
             <button className="top-home" onClick={() => handleNavClick('Visão geral')} aria-label="Ir para visão geral"><LayoutDashboard size={17} /></button>

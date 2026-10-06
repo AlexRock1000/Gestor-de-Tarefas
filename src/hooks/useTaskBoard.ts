@@ -1,6 +1,7 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import {
   computeScore,
+  describeRequestError,
   formatLocalDate,
   getDueState,
   parseCsv,
@@ -251,6 +252,9 @@ export function useTaskBoard() {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null)
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true)
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>(() => {
     if (typeof window === 'undefined') return initialActivities
     const stored = window.localStorage.getItem(activityStorageKey)
@@ -263,32 +267,29 @@ export function useTaskBoard() {
     }
   })
 
-  useEffect(() => {
-    let isMounted = true
-    void apiRequest<Task[]>('/tasks')
-      .then((savedTasks) => {
-        if (isMounted) {
-          setTasks(savedTasks.map((task) => ({ ...task, due: normalizeDueDate(task.due) })))
-        }
-      })
-      .catch(() => undefined)
+  const syncFromServer = async () => {
+    setSyncError(null)
+    setIsLoadingTasks(true)
+    setIsLoadingActivities(true)
 
-    return () => {
-      isMounted = false
+    try {
+      const [savedTasks, savedActivities] = await Promise.all([
+        apiRequest<Task[]>('/tasks'),
+        apiRequest<Activity[]>('/activities'),
+      ])
+
+      setTasks(savedTasks.map((task) => ({ ...task, due: normalizeDueDate(task.due) })))
+      setActivities(savedActivities)
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+    } finally {
+      setIsLoadingTasks(false)
+      setIsLoadingActivities(false)
     }
-  }, [])
+  }
 
   useEffect(() => {
-    let isMounted = true
-    void apiRequest<Activity[]>('/activities')
-      .then((savedActivities) => {
-        if (isMounted) setActivities(savedActivities)
-      })
-      .catch(() => undefined)
-
-    return () => {
-      isMounted = false
-    }
+    void syncFromServer()
   }, [])
 
   useEffect(() => {
@@ -379,7 +380,8 @@ export function useTaskBoard() {
         method: 'PATCH',
         body: JSON.stringify(nextTask),
       })
-    } catch {
+    } catch (error) {
+      setSyncError(describeRequestError(error))
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((task) => (task.id === taskId ? nextTask : task))))
       }
@@ -393,7 +395,8 @@ export function useTaskBoard() {
         body: JSON.stringify(activity),
       })
       setActivities((current) => [savedActivity, ...current].slice(0, 12))
-    } catch {
+    } catch (error) {
+      setSyncError(describeRequestError(error))
       setActivities((current) => [{ ...activity, id: Date.now() }, ...current].slice(0, 12))
     }
   }
@@ -413,7 +416,8 @@ export function useTaskBoard() {
         method: 'PATCH',
         body: JSON.stringify(nextTask),
       })
-    } catch {
+    } catch (error) {
+      setSyncError(describeRequestError(error))
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((item) => (item.id === id ? nextTask : item))))
       }
@@ -487,7 +491,8 @@ export function useTaskBoard() {
 
     try {
       await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' })
-    } catch {
+    } catch (error) {
+      setSyncError(describeRequestError(error))
       if (typeof window !== 'undefined') {
         const nextTasks = tasks.filter((taskItem) => taskItem.id !== taskId)
         window.localStorage.setItem(storageKey, JSON.stringify(nextTasks))
@@ -679,6 +684,7 @@ export function useTaskBoard() {
       body: JSON.stringify({ tasks: importedTasks }),
     })
     setTasks((current) => [...current, ...savedTasks])
+    setSyncError(null)
     void recordActivity({ actor: 'Daniel', tone: 'teal', message: 'importou', taskTitle: `${savedTasks.length} tarefas via CSV`, time: 'Agora' })
     return savedTasks.length
   }
@@ -731,7 +737,9 @@ export function useTaskBoard() {
         )
         setSelectedTaskId(updatedTask.id)
       }
-    } catch {
+      setSyncError(null)
+    } catch (error) {
+      setSyncError(describeRequestError(error))
       if (isCreatingTask) {
         setTasks((current) => [...current, normalizedTask])
       } else {
@@ -904,5 +912,9 @@ export function useTaskBoard() {
     statusOrder,
     dueToInputValue,
     inputValueToDue,
+    isLoadingTasks,
+    isLoadingActivities,
+    syncError,
+    syncFromServer,
   }
 }

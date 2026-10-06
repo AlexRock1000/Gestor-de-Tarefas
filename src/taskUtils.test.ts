@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeScore,
+  describeRequestError,
   formatDueDate,
   getDueState,
   getPriorityBand,
@@ -77,5 +78,12 @@ describe('getPriorityLabel', () => {
     expect(getPriorityLabel(100)).toBe('Alta prioridade')
     expect(getPriorityLabel(70)).toBe('Média')
     expect(getPriorityLabel(30)).toBe('Baixa')
+  })
+})
+
+describe('describeRequestError', () => {
+  it('expõe uma mensagem útil para falha de rede e para erro do backend', () => {
+    expect(describeRequestError(new Error('Failed to fetch'))).toBe('Não foi possível conectar ao servidor. Verifique a rede e tente novamente.')
+    expect(describeRequestError(new Error('Request failed: 500'))).toBe('O servidor respondeu com erro. Tente novamente em instantes.')
   })
 })

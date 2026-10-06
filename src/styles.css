@@ -1192,6 +1192,39 @@ h2 {
 
 .task-list { border-top: 1px solid var(--line); }
 
+.sync-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 42px 0;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(141, 150, 148, 0.35);
+  background: rgba(255, 255, 255, 0.03);
+  color: #dfe9e6;
+  font-size: 12px;
+}
+
+.sync-banner.alert {
+  border-color: rgba(212, 92, 79, 0.42);
+  background: rgba(212, 92, 79, 0.12);
+}
+
+.sync-banner.subtle {
+  border-color: rgba(23, 132, 124, 0.35);
+  background: rgba(23, 132, 124, 0.1);
+}
+
+.sync-banner button {
+  border: 0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  padding: 7px 12px;
+  font-weight: 700;
+}
+
 .toast {
   position: fixed;
   right: 24px;

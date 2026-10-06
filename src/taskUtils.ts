@@ -156,3 +156,24 @@ export const getPriorityLabel = (score: number) => {
   if (score >= 50) return 'Média'
   return 'Baixa'
 }
+
+export const describeRequestError = (error: unknown, fallback = 'Não foi possível sincronizar os dados agora.') => {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? '')
+  const message = rawMessage.trim().toLowerCase()
+
+  if (!message) return fallback
+
+  if (message.includes('failed to fetch') || message.includes('network') || message.includes('load failed')) {
+    return 'Não foi possível conectar ao servidor. Verifique a rede e tente novamente.'
+  }
+
+  if (message.includes('request failed:') || /\b(4\d{2}|5\d{2})\b/.test(rawMessage)) {
+    return 'O servidor respondeu com erro. Tente novamente em instantes.'
+  }
+
+  if (message.includes('invalid') || message.includes('dados') || message.includes('required')) {
+    return 'Os dados enviados não são válidos. Revise as informações e tente novamente.'
+  }
+
+  return fallback
+}
