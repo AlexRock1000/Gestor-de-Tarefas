@@ -14,9 +14,8 @@ export type Task = {
   due: string
   createdAt: string
   responsible: string
-  gravidade: number
+  importancia: number
   urgencia: number
-  tendencia: number
   scoreGut: number
   tag: string
   checklist: ChecklistItem[]
@@ -34,4 +33,4 @@ export type Activity = {
 }
 
 export type DeadlineFilter = 'Todos' | 'Em aberto' | 'Concluídas'
-export type GutFilter = 'Todos' | 'Críticas (80+)' | 'Altas (50-79)' | 'Baixas (até 49)'
+export type GutFilter = 'Todos' | 'Críticas (20+)' | 'Altas (12-19)' | 'Baixas (até 11)'

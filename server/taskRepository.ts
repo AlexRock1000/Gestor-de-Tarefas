@@ -15,9 +15,8 @@ export type Task = {
   due: string
   createdAt: string
   responsible: string
-  gravidade: number
+  importancia: number
   urgencia: number
-  tendencia: number
   scoreGut: number
   tag: string
   checklist: Array<{ label: string; done: boolean }>
@@ -25,8 +24,10 @@ export type Task = {
   observacoes: string
 }
 
-type TaskRow = RowDataPacket & Omit<Task, 'id' | 'checklist'> & {
+type TaskRow = RowDataPacket & Omit<Task, 'id' | 'checklist' | 'importancia'> & {
   id: number | string
+  importancia?: number | string
+  gravidade?: number | string
   checklist: Task['checklist'] | string
 }
 
@@ -34,17 +35,24 @@ type TaskWrite = Omit<Task, 'id'>
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const seedFilePath = path.join(projectRoot, 'server', 'data', 'tasks.json')
-const columns = '`title`, `phase`, `status`, `due`, `createdAt`, `responsible`, `gravidade`, `urgencia`, `tendencia`, `scoreGut`, `tag`, `checklist`, `promptIa`, `observacoes`'
-const values = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?'
+const columns = '`title`, `phase`, `status`, `due`, `createdAt`, `responsible`, `importancia`, `urgencia`, `scoreGut`, `tag`, `checklist`, `promptIa`, `observacoes`'
+const values = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?'
 
 const mapTask = (row: TaskRow): Task => ({
-  ...row,
   id: Number(row.id),
-  gravidade: Number(row.gravidade),
+  title: row.title,
+  phase: row.phase,
+  status: row.status,
+  due: row.due,
+  createdAt: row.createdAt,
+  responsible: row.responsible,
+  importancia: Number(row.importancia ?? row.gravidade ?? 3),
   urgencia: Number(row.urgencia),
-  tendencia: Number(row.tendencia),
   scoreGut: Number(row.scoreGut),
+  tag: row.tag,
   checklist: typeof row.checklist === 'string' ? JSON.parse(row.checklist) as Task['checklist'] : row.checklist,
+  promptIa: row.promptIa,
+  observacoes: row.observacoes,
 })
 
 const writeValues = (task: TaskWrite) => [
@@ -54,9 +62,8 @@ const writeValues = (task: TaskWrite) => [
   task.due,
   task.createdAt,
   task.responsible,
-  task.gravidade,
+  task.importancia,
   task.urgencia,
-  task.tendencia,
   task.scoreGut,
   task.tag,
   JSON.stringify(task.checklist),
@@ -83,10 +90,9 @@ export const seedTasksIfEmpty = async () => {
         due: task.due,
         createdAt: task.createdAt,
         responsible: task.responsible,
-        gravidade: task.gravidade,
+        importancia: task.importancia,
         urgencia: task.urgencia,
-        tendencia: task.tendencia,
-        scoreGut: task.gravidade * task.urgencia * task.tendencia,
+        scoreGut: task.importancia * task.urgencia,
         tag: task.tag,
         checklist: task.checklist,
         promptIa: task.promptIa,

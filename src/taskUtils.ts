@@ -113,8 +113,11 @@ export const parseCsv = (content: string): string[][] => {
   return rows
 }
 
-export const computeScore = (gravidade: number, urgencia: number, tendencia: number) =>
-  gravidade * urgencia * tendencia
+export const computeScore = (importancia: number, urgencia: number) =>
+  importancia * urgencia
+
+export const CRITICAL_PRIORITY_THRESHOLD = 20
+export const HIGH_PRIORITY_THRESHOLD = 12
 
 export const getDueState = (due: string, status: string, referenceDate = new Date()): DueState => {
   if (status === 'Concluído' || due === 'Concluída') return 'completed'
@@ -146,14 +149,14 @@ export const resolveDueForStatus = (status: string, currentDue: string) => {
 }
 
 export const getPriorityBand = (score: number) => {
-  if (score >= 80) return 'critical'
-  if (score >= 50) return 'high'
+  if (score >= CRITICAL_PRIORITY_THRESHOLD) return 'critical'
+  if (score >= HIGH_PRIORITY_THRESHOLD) return 'high'
   return 'low'
 }
 
 export const getPriorityLabel = (score: number) => {
-  if (score >= 80) return 'Alta prioridade'
-  if (score >= 50) return 'Média'
+  if (score >= CRITICAL_PRIORITY_THRESHOLD) return 'Alta prioridade'
+  if (score >= HIGH_PRIORITY_THRESHOLD) return 'Média'
   return 'Baixa'
 }
 

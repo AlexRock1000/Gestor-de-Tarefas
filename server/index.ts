@@ -80,10 +80,9 @@ app.post('/api/tasks', async (req, res) => {
     due: req.body?.due ?? 'Sem prazo',
     createdAt: new Date().toISOString().slice(0, 10),
     responsible: req.body?.responsible ?? 'Não atribuída',
-    gravidade: Number(req.body?.gravidade ?? 3),
+    importancia: Number(req.body?.importancia ?? req.body?.gravidade ?? 3),
     urgencia: Number(req.body?.urgencia ?? 3),
-    tendencia: Number(req.body?.tendencia ?? 3),
-    scoreGut: Number(req.body?.gravidade ?? 3) * Number(req.body?.urgencia ?? 3) * Number(req.body?.tendencia ?? 3),
+    scoreGut: Number(req.body?.importancia ?? req.body?.gravidade ?? 3) * Number(req.body?.urgencia ?? 3),
     tag: req.body?.tag ?? 'Nova',
     checklist: Array.isArray(req.body?.checklist) ? req.body.checklist : [{ label: 'Definir próximo passo', done: false }],
     promptIa: req.body?.promptIa ?? 'Estruture os próximos passos práticos para esta tarefa.',
@@ -112,12 +111,15 @@ app.patch('/api/tasks/:id', async (req, res) => {
     return
   }
 
-  const updatedTask: Task = {
-    ...current,
-    ...req.body,
+  const updatedTask = {
+    ...Object.fromEntries(
+      Object.entries({ ...current, ...req.body }).filter(([key]) => key !== 'gravidade' && key !== 'tendencia'),
+    ),
     id: taskId,
-  }
-  updatedTask.scoreGut = Number(updatedTask.gravidade) * Number(updatedTask.urgencia) * Number(updatedTask.tendencia)
+  } as Task
+  updatedTask.importancia = Number(req.body?.importancia ?? req.body?.gravidade ?? updatedTask.importancia)
+  updatedTask.urgencia = Number(req.body?.urgencia ?? updatedTask.urgencia)
+  updatedTask.scoreGut = updatedTask.importancia * updatedTask.urgencia
 
   const saved = await updateTask(taskId, updatedTask)
   if (!saved) {

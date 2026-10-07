@@ -1,11 +1,15 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import type { Phase, Status, Task } from '../types'
+import type { Phase, Task } from '../types'
+
+const priorityFactors = [
+  { field: 'importancia', label: 'Importância' },
+  { field: 'urgencia', label: 'Urgência' },
+] as const
 
 type TaskEditorModalProps = {
   editingTask: Task
   phases: { name: Phase; tone: string; accent: string }[]
-  statusOrder: Status[]
   onClose: () => void
   onFieldChange: <K extends keyof Task>(field: K, value: Task[K]) => void
   onSave: () => void
@@ -17,7 +21,6 @@ type TaskEditorModalProps = {
 export function TaskEditorModal({
   editingTask,
   phases,
-  statusOrder,
   onClose,
   onFieldChange,
   onSave,
@@ -78,25 +81,14 @@ export function TaskEditorModal({
             {titleError && <small className="field-error">Informe um título para salvar a tarefa.</small>}
           </label>
 
-          <div className="modal-grid">
-            <label className="field">
-              <span>Fase</span>
-              <select value={editingTask.phase} onChange={(event) => onFieldChange('phase', event.target.value as Phase)}>
-                {phases.map((phase) => (
-                  <option key={phase.name} value={phase.name}>{phase.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>Status</span>
-              <select value={editingTask.status} onChange={(event) => onFieldChange('status', event.target.value as Status)}>
-                {statusOrder.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="field">
+            <span>Fase</span>
+            <select value={editingTask.phase} onChange={(event) => onFieldChange('phase', event.target.value as Phase)}>
+              {phases.map((phase) => (
+                <option key={phase.name} value={phase.name}>{phase.name}</option>
+              ))}
+            </select>
+          </label>
 
           <div className="modal-grid">
             <label className="field">
@@ -107,7 +99,6 @@ export function TaskEditorModal({
                 onChange={(event) => onFieldChange('due', inputValueToDue(event.target.value))}
               />
             </label>
-
             <label className="field">
               <span>Responsável</span>
               <input
@@ -132,9 +123,9 @@ export function TaskEditorModal({
           </div>
 
           <div className="gut-grid">
-            {(['gravidade', 'urgencia', 'tendencia'] as const).map((field) => (
+            {priorityFactors.map(({ field, label }) => (
               <label key={field} className="gut-field">
-                <span>{field}</span>
+                <span>{label}</span>
                 <input
                   type="number"
                   min={1}

@@ -1,12 +1,14 @@
 import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
 import {
   computeScore,
+  CRITICAL_PRIORITY_THRESHOLD,
   describeRequestError,
   formatLocalDate,
   getDueState,
   parseCsv,
   getPriorityBand,
   getPriorityLabel,
+  HIGH_PRIORITY_THRESHOLD,
   normalizeDueDate,
   resolveDueForStatus,
   type DueState,
@@ -66,10 +68,9 @@ export const initialTasks: Task[] = [
     due: formatLocalDate(new Date()),
     createdAt: '12 set',
     responsible: 'Daniel Rocha',
-    gravidade: 5,
+    importancia: 5,
     urgencia: 4,
-    tendencia: 5,
-    scoreGut: 100,
+    scoreGut: 20,
     tag: 'Diagnóstico',
     checklist: [
       { label: 'Exportar relatório do ERP', done: true },
@@ -87,10 +88,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-18',
     createdAt: '14 set',
     responsible: 'Ana Maria',
-    gravidade: 4,
+    importancia: 4,
     urgencia: 3,
-    tendencia: 5,
-    scoreGut: 60,
+    scoreGut: 12,
     tag: 'Política',
     checklist: [
       { label: 'Levantar frequência atual', done: false },
@@ -108,10 +108,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-20',
     createdAt: '10 set',
     responsible: 'Lucas Costa',
-    gravidade: 4,
+    importancia: 4,
     urgencia: 4,
-    tendencia: 4,
-    scoreGut: 64,
+    scoreGut: 16,
     tag: 'Contratos',
     checklist: [
       { label: 'Consolidar contratos vigentes', done: true },
@@ -129,10 +128,9 @@ export const initialTasks: Task[] = [
     due: 'Concluída',
     createdAt: '08 set',
     responsible: 'Fernanda Silva',
-    gravidade: 3,
+    importancia: 3,
     urgencia: 2,
-    tendencia: 5,
-    scoreGut: 30,
+    scoreGut: 6,
     tag: 'Organização',
     checklist: [
       { label: 'Criar estrutura de pastas', done: true },
@@ -150,10 +148,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-24',
     createdAt: '16 set',
     responsible: 'Bruno Souza',
-    gravidade: 5,
+    importancia: 5,
     urgencia: 4,
-    tendencia: 5,
-    scoreGut: 100,
+    scoreGut: 20,
     tag: 'Fluxo',
     checklist: [
       { label: 'Entrevistar responsáveis', done: false },
@@ -171,10 +168,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-26',
     createdAt: '15 set',
     responsible: 'Miguel Nunes',
-    gravidade: 5,
+    importancia: 5,
     urgencia: 4,
-    tendencia: 3,
-    scoreGut: 60,
+    scoreGut: 20,
     tag: 'IA & Automação',
     checklist: [
       { label: 'Mapear rotina manual atual', done: true },
@@ -210,6 +206,23 @@ const apiRequest = async <T>(endpoint: string, options?: RequestInit): Promise<T
   return response.json() as Promise<T>
 }
 
+const normalizeTask = (value: unknown): Task => {
+  const task = value as Record<string, unknown>
+  const importancia = Number(task.importancia ?? task.gravidade ?? 3)
+  const urgencia = Number(task.urgencia ?? 3)
+  const normalizedFields = Object.fromEntries(
+    Object.entries(task).filter(([key]) => key !== 'gravidade' && key !== 'tendencia'),
+  )
+
+  return {
+    ...normalizedFields,
+    importancia,
+    urgencia,
+    scoreGut: computeScore(importancia, urgencia),
+    due: normalizeDueDate(String(task.due ?? 'Sem prazo')),
+  } as Task
+}
+
 const initialActivities: Activity[] = [
   { id: 1, actor: 'Daniel', tone: 'teal', message: 'concluiu', taskTitle: 'Centralizar POPs', time: 'Há 24 min' },
   { id: 2, actor: 'Ana', tone: 'amber', message: 'atualizou a prioridade de', taskTitle: 'Revisar contratos', time: 'Há 1 h' },
@@ -229,9 +242,9 @@ export function useTaskBoard() {
     }
 
     try {
-      const parsed = JSON.parse(stored) as Task[]
+      const parsed = JSON.parse(stored) as unknown[]
       return Array.isArray(parsed) && parsed.length
-        ? parsed.map((task) => ({ ...task, due: normalizeDueDate(task.due) }))
+        ? parsed.map(normalizeTask)
         : initialTasks
     } catch {
       return initialTasks
@@ -278,7 +291,7 @@ export function useTaskBoard() {
         apiRequest<Activity[]>('/activities'),
       ])
 
-      setTasks(savedTasks.map((task) => ({ ...task, due: normalizeDueDate(task.due) })))
+      setTasks(savedTasks.map(normalizeTask))
       setActivities(savedActivities)
     } catch (error) {
       setSyncError(describeRequestError(error))
@@ -330,13 +343,13 @@ export function useTaskBoard() {
         (deadlineFilter === 'Em aberto' && task.status !== 'Concluído')
       const gutMatches =
         gutFilter === 'Todos' ||
-        (gutFilter === 'Críticas (80+)' && task.scoreGut >= 80) ||
-        (gutFilter === 'Altas (50-79)' && task.scoreGut >= 50 && task.scoreGut < 80) ||
-        (gutFilter === 'Baixas (até 49)' && task.scoreGut < 50)
+        (gutFilter === 'Críticas (20+)' && task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD) ||
+        (gutFilter === 'Altas (12-19)' && task.scoreGut >= HIGH_PRIORITY_THRESHOLD && task.scoreGut < CRITICAL_PRIORITY_THRESHOLD) ||
+        (gutFilter === 'Baixas (até 11)' && task.scoreGut < HIGH_PRIORITY_THRESHOLD)
       const quickMatches =
         quickFilter === 'Todos' ||
         (quickFilter === 'Hoje' && (dueState === 'today' || dueState === 'overdue')) ||
-        (quickFilter === 'Urgentes' && (task.scoreGut >= 80 || dueState === 'today' || dueState === 'overdue')) ||
+        (quickFilter === 'Urgentes' && (task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD || dueState === 'today' || dueState === 'overdue')) ||
         (quickFilter === 'Concluídas' && task.status === 'Concluído')
 
       return phaseMatches && statusMatches && titleMatches && responsibleMatches && deadlineMatches && gutMatches && quickMatches
@@ -362,13 +375,12 @@ export function useTaskBoard() {
       return
     }
 
-    const nextGravidade = updates.gravidade ?? currentTask.gravidade
+    const nextImportancia = updates.importancia ?? currentTask.importancia
     const nextUrgencia = updates.urgencia ?? currentTask.urgencia
-    const nextTendencia = updates.tendencia ?? currentTask.tendencia
     const nextTask = {
       ...currentTask,
       ...updates,
-      scoreGut: computeScore(nextGravidade, nextUrgencia, nextTendencia),
+      scoreGut: computeScore(nextImportancia, nextUrgencia),
     }
 
     setTasks((current) =>
@@ -464,10 +476,9 @@ export function useTaskBoard() {
       due: 'Sem prazo',
       createdAt,
       responsible: 'Não atribuída',
-      gravidade: 3,
+      importancia: 3,
       urgencia: 3,
-      tendencia: 3,
-      scoreGut: 27,
+      scoreGut: 9,
       tag: 'Nova',
       checklist: [{ label: 'Definir próximo passo', done: false }],
       promptIa: 'Estruture os próximos três passos práticos para esta tarefa, considerando prioridade, risco e tempo de execução.',
@@ -539,10 +550,9 @@ export function useTaskBoard() {
       'Status',
       'Responsável',
       'Prazo',
-      'Gravidade',
+      'Importância',
       'Urgência',
-      'Tendência',
-      'Prioridade GUT',
+      'Prioridade',
       'Tag',
       'Checklist',
       'Prompt de IA',
@@ -555,9 +565,8 @@ export function useTaskBoard() {
       task.status,
       task.responsible,
       task.due,
-      task.gravidade,
+      task.importancia,
       task.urgencia,
-      task.tendencia,
       task.scoreGut,
       task.tag,
       JSON.stringify(task.checklist),
@@ -595,13 +604,11 @@ export function useTaskBoard() {
       const index = column(name)
       return index < 0 ? '' : row[index] ?? ''
     }
-    const legacyGutFactors = (score: number) => {
-      for (let gravidade = 1; gravidade <= 5; gravidade += 1) {
+    const priorityFactorsFromScore = (score: number) => {
+      for (let importancia = 1; importancia <= 5; importancia += 1) {
         for (let urgencia = 1; urgencia <= 5; urgencia += 1) {
-          for (let tendencia = 1; tendencia <= 5; tendencia += 1) {
-            if (computeScore(gravidade, urgencia, tendencia) === score) {
-              return { gravidade, urgencia, tendencia }
-            }
+          if (computeScore(importancia, urgencia) === score) {
+            return { importancia, urgencia }
           }
         }
       }
@@ -619,21 +626,22 @@ export function useTaskBoard() {
       const statusValue = valueAt(row, 'Status')
       const phase = phases.find((item) => item.name === phaseValue)?.name ?? 'Processos'
       const status = statusOrder.includes(statusValue as Status) ? statusValue as Status : 'Pendente'
-      const gutColumns = ['Gravidade', 'Urgência', 'Tendência'].map((name) => column(name))
-      let gut: { gravidade: number; urgencia: number; tendencia: number }
-      if (gutColumns.every((index) => index >= 0)) {
-        const values = gutColumns.map((index) => Number(row[index]))
+      const importanceColumn = column('Importância') >= 0 ? column('Importância') : column('Gravidade')
+      const urgencyColumn = column('Urgência')
+      let priority: { importancia: number; urgencia: number }
+      if (importanceColumn >= 0 && urgencyColumn >= 0) {
+        const values = [Number(row[importanceColumn]), Number(row[urgencyColumn])]
         if (values.some((value) => !Number.isInteger(value) || value < 1 || value > 5)) {
-          throw new Error(`A linha ${index + 2} tem valores GUT fora do intervalo de 1 a 5.`)
+          throw new Error(`A linha ${index + 2} tem valores de prioridade fora do intervalo de 1 a 5.`)
         }
-        gut = { gravidade: values[0], urgencia: values[1], tendencia: values[2] }
+        priority = { importancia: values[0], urgencia: values[1] }
       } else {
-        const score = Number(valueAt(row, 'Prioridade GUT'))
-        const reconstructedGut = Number.isInteger(score) ? legacyGutFactors(score) : null
-        if (!reconstructedGut) {
-          throw new Error(`A linha ${index + 2} não tem fatores GUT válidos para reconstruir a prioridade.`)
+        const score = Number(valueAt(row, 'Prioridade') || valueAt(row, 'Prioridade GUT'))
+        const reconstructedPriority = Number.isInteger(score) ? priorityFactorsFromScore(score) : null
+        if (!reconstructedPriority) {
+          throw new Error(`A linha ${index + 2} não tem fatores válidos para reconstruir a prioridade.`)
         }
-        gut = reconstructedGut
+        priority = reconstructedPriority
       }
 
       let checklist: ChecklistItem[] = [{ label: 'Definir próximo passo', done: false }]
@@ -670,8 +678,8 @@ export function useTaskBoard() {
         due: normalizeDueDate(due),
         createdAt: 'Importada',
         responsible: valueAt(row, 'Responsável').trim() || 'Não atribuída',
-        ...gut,
-        scoreGut: computeScore(gut.gravidade, gut.urgencia, gut.tendencia),
+        ...priority,
+        scoreGut: computeScore(priority.importancia, priority.urgencia),
         tag: valueAt(row, 'Tag').trim() || 'Importada',
         checklist,
         promptIa: valueAt(row, 'Prompt de IA') || 'Estruture os próximos passos práticos para esta tarefa, considerando prioridade, risco e prazo.',
@@ -702,17 +710,15 @@ export function useTaskBoard() {
       return
     }
 
+    const status = isCreatingTask ? 'Pendente' : editingTask.status
     const normalizedTask = {
       ...editingTask,
+      status,
       title: trimmedTitle,
       responsible: trimmedResponsible,
       tag: trimmedTag || 'Geral',
-      due: resolveDueForStatus(editingTask.status, editingTask.due),
-      scoreGut: computeScore(
-        editingTask.gravidade,
-        editingTask.urgencia,
-        editingTask.tendencia,
-      ),
+      due: resolveDueForStatus(status, editingTask.due),
+      scoreGut: computeScore(editingTask.importancia, editingTask.urgencia),
     }
 
     try {
@@ -802,10 +808,10 @@ export function useTaskBoard() {
   const isOverview = activeView === 'Visão geral'
 
   const activeTasksCount = tasks.filter((task) => task.status !== 'Concluído').length
-  const highPriorityCount = tasks.filter((task) => task.scoreGut >= 80 && task.status !== 'Concluído').length
+  const highPriorityCount = tasks.filter((task) => task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD && task.status !== 'Concluído').length
   const alertTasks = tasks
     .filter((task) => task.status !== 'Concluído')
-    .filter((task) => getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' || task.scoreGut >= 80)
+    .filter((task) => getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' || task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD)
     .sort((a, b) => {
       const stateWeight = (state: DueState) => state === 'overdue' ? 3 : state === 'today' ? 2 : 1
       return stateWeight(getDueState(b.due, b.status)) - stateWeight(getDueState(a.due, a.status)) || b.scoreGut - a.scoreGut

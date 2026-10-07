@@ -41,8 +41,8 @@ export function TaskCard({
       <button
         type="button"
         className={`task-status ${task.status === 'Concluído' ? 'done' : task.status === 'Em Andamento' ? 'progress' : ''}`}
-        aria-label={`Avançar status de ${task.title}; atual: ${task.status}`}
-        title="Avançar status"
+        aria-label={task.status === 'Concluído' ? `Reabrir tarefa ${task.title}` : `Marcar tarefa ${task.title} como feita`}
+        title={task.status === 'Concluído' ? 'Reabrir tarefa' : 'Feita'}
         onClick={(event) => {
           event.stopPropagation()
           onToggleStatus(task.id)
@@ -65,7 +65,7 @@ export function TaskCard({
       </div>
 
       <div className="task-priority">
-        <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>GUT {task.scoreGut}</span>
+        <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>Prioridade {task.scoreGut}</span>
         <span className={`due-date ${dueState}`}>
           <span>{formatDueDate(task.due)}</span>
           <small>{dueState === 'overdue' ? 'Atrasada' : dueState === 'today' ? 'Vence hoje' : dueState === 'upcoming' ? 'No prazo' : dueState === 'completed' ? 'Concluída' : 'Sem prazo'}</small>

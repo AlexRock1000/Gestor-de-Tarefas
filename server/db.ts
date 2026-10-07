@@ -1,5 +1,6 @@
 import 'dotenv/config'
 import mysql from 'mysql2/promise'
+import type { RowDataPacket } from 'mysql2'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
@@ -29,5 +30,39 @@ export const initializeDatabase = async () => {
   for (const statement of statements) {
     await pool.query(statement)
   }
+
+  const [columnRows] = await pool.query<RowDataPacket[]>(
+    'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'tasks\'',
+  )
+  const columns = new Set(columnRows.map((row) => String(row.COLUMN_NAME)))
+  const [constraintRows] = await pool.query<RowDataPacket[]>(
+    'SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'tasks\' AND CONSTRAINT_TYPE = \'CHECK\'',
+  )
+  const constraints = new Set(constraintRows.map((row) => String(row.CONSTRAINT_NAME)))
+  const dropCheck = async (name: string) => {
+    if (constraints.has(name)) {
+      await pool.query(`ALTER TABLE tasks DROP CHECK \`${name}\``)
+      constraints.delete(name)
+    }
+  }
+
+  if (columns.has('gravidade') && !columns.has('importancia')) {
+    await dropCheck('chk_tasks_gravidade')
+    await pool.query('ALTER TABLE tasks CHANGE COLUMN gravidade importancia TINYINT UNSIGNED NOT NULL DEFAULT 3')
+    columns.delete('gravidade')
+    columns.add('importancia')
+  }
+
+  if (columns.has('tendencia')) {
+    await dropCheck('chk_tasks_tendencia')
+    await pool.query('ALTER TABLE tasks DROP COLUMN tendencia')
+    columns.delete('tendencia')
+  }
+
+  if (!constraints.has('chk_tasks_importancia')) {
+    await pool.query('ALTER TABLE tasks ADD CONSTRAINT chk_tasks_importancia CHECK (importancia BETWEEN 1 AND 5)')
+  }
+  await pool.query('UPDATE tasks SET scoreGut = importancia * urgencia')
+  await pool.query('ALTER TABLE tasks MODIFY scoreGut SMALLINT UNSIGNED NOT NULL DEFAULT 9')
   await pool.query('SELECT 1')
 }

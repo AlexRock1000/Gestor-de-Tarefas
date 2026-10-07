@@ -12,9 +12,10 @@ import {
 } from './taskUtils'
 
 describe('computeScore', () => {
-  it('multiplica gravidade, urgência e tendência', () => {
-    expect(computeScore(5, 4, 5)).toBe(100)
-    expect(computeScore(3, 3, 3)).toBe(27)
+  it('multiplica importância e urgência', () => {
+    expect(computeScore(5, 4)).toBe(20)
+    expect(computeScore(5, 5)).toBe(25)
+    expect(computeScore(3, 3)).toBe(9)
   })
 })
 
@@ -66,18 +67,18 @@ describe('resolveDueForStatus', () => {
 })
 
 describe('getPriorityBand', () => {
-  it('classifica corretamente a faixa de prioridade do score GUT', () => {
-    expect(getPriorityBand(100)).toBe('critical')
-    expect(getPriorityBand(70)).toBe('high')
-    expect(getPriorityBand(30)).toBe('low')
+  it('classifica corretamente a faixa de prioridade', () => {
+    expect(getPriorityBand(20)).toBe('critical')
+    expect(getPriorityBand(12)).toBe('high')
+    expect(getPriorityBand(9)).toBe('low')
   })
 })
 
 describe('getPriorityLabel', () => {
   it('atribui o nome correto da prioridade', () => {
-    expect(getPriorityLabel(100)).toBe('Alta prioridade')
-    expect(getPriorityLabel(70)).toBe('Média')
-    expect(getPriorityLabel(30)).toBe('Baixa')
+    expect(getPriorityLabel(20)).toBe('Alta prioridade')
+    expect(getPriorityLabel(12)).toBe('Média')
+    expect(getPriorityLabel(9)).toBe('Baixa')
   })
 })
 

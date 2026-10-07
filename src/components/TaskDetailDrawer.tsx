@@ -1,12 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Check, Clipboard, X } from 'lucide-react'
-import { computeScore, getPriorityBand, getPriorityLabel, resolveDueForStatus } from '../taskUtils'
-import type { Status, Task } from '../types'
+import { computeScore, getPriorityBand, getPriorityLabel } from '../taskUtils'
+import type { Task } from '../types'
+
+const priorityFactors = [
+  { field: 'importancia', label: 'Importância' },
+  { field: 'urgencia', label: 'Urgência' },
+] as const
 
 type TaskDetailDrawerProps = {
   task: Task
   copiedTaskId: number | null
-  statusOrder: Status[]
   dueToInputValue: (due: string) => string
   inputValueToDue: (value: string) => string
   onClose: () => void
@@ -19,7 +23,6 @@ type TaskDetailDrawerProps = {
 export function TaskDetailDrawer({
   task,
   copiedTaskId,
-  statusOrder,
   dueToInputValue,
   inputValueToDue,
   onClose,
@@ -37,16 +40,11 @@ export function TaskDetailDrawer({
   const updateDraft = <K extends keyof Task>(field: K, value: Task[K]) => {
     setDraftTask((current) => {
       const nextTask = { ...current, [field]: value }
-      if (field === 'gravidade' || field === 'urgencia' || field === 'tendencia') {
-        nextTask.scoreGut = computeScore(nextTask.gravidade, nextTask.urgencia, nextTask.tendencia)
+      if (field === 'importancia' || field === 'urgencia') {
+        nextTask.scoreGut = computeScore(nextTask.importancia, nextTask.urgencia)
       }
       return nextTask
     })
-  }
-
-  const updateDraftStatus = (status: Status) => {
-    updateDraft('status', status)
-    updateDraft('due', resolveDueForStatus(status, draftTask.due))
   }
 
   const toggleDraftChecklist = (itemIndex: number) => {
@@ -76,14 +74,10 @@ export function TaskDetailDrawer({
       </p>
 
       <div className="drawer-quick-fields">
-        <label className="drawer-status">
+        <div className="drawer-status">
           <span>Status</span>
-          <select value={draftTask.status} onChange={(event) => updateDraftStatus(event.target.value as Status)}>
-            {statusOrder.map((status) => (
-              <option key={status} value={status}>{status}</option>
-            ))}
-          </select>
-        </label>
+          <strong>{draftTask.status}</strong>
+        </div>
         <label className="drawer-status">
           <span>Prazo</span>
           <input
@@ -107,14 +101,14 @@ export function TaskDetailDrawer({
 
       <div className="drawer-section gut-panel">
         <div className="drawer-section-head">
-          <h3>Matriz GUT</h3>
+          <h3>Matriz de prioridade</h3>
           <span>{draftTask.scoreGut}</span>
         </div>
 
         <div className="gut-grid">
-          {(['gravidade', 'urgencia', 'tendencia'] as const).map((field) => (
+          {priorityFactors.map(({ field, label }) => (
             <label key={field} className="gut-field">
-              <span>{field}</span>
+              <span>{label}</span>
               <input
                 type="number"
                 min={1}
@@ -132,10 +126,10 @@ export function TaskDetailDrawer({
 
         <div className="gut-box">
           <div>
-            <span>Prioridade GUT</span>
-            <strong>{draftTask.scoreGut}<small> / 125</small></strong>
+            <span>Prioridade</span>
+            <strong>{draftTask.scoreGut}<small> / 25</small></strong>
           </div>
-          <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>
+          <span className={`priority-label ${getPriorityBand(draftTask.scoreGut)}`}>
             {getPriorityLabel(draftTask.scoreGut)}
           </span>
         </div>
