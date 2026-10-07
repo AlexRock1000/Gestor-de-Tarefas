@@ -43,6 +43,26 @@ const parseDueDate = (due: string, referenceDate: Date) => {
 export const formatLocalDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
+export const formatDateForDisplay = (value: string) => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+export const formatDateForInput = (value: string) => {
+  if (!value || value === 'Sem prazo' || value === 'Concluída') return ''
+  const normalized = normalizeDueDate(value)
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? formatDateForDisplay(normalized) : ''
+}
+
+export const parseBrazilianDate = (value: string) => {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!match) return null
+  const [, day, month, year] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) return null
+  return `${year}-${month}-${day}`
+}
+
 export const normalizeDueDate = (due: string, referenceDate = new Date()) => {
   if (due === 'Hoje') return formatLocalDate(referenceDate)
   const parsedDate = parseDueDate(due, referenceDate)

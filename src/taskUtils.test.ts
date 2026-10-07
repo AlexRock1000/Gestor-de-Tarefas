@@ -3,6 +3,8 @@ import {
   computeScore,
   describeRequestError,
   formatDueDate,
+  formatDateForDisplay,
+  formatDateForInput,
   getDueState,
   getImportanceCategory,
   getImportanceValue,
@@ -12,6 +14,7 @@ import {
   getPriorityLabel,
   normalizeDueDate,
   parseCsv,
+  parseBrazilianDate,
   resolveDueForStatus,
 } from './taskUtils'
 
@@ -78,6 +81,18 @@ describe('getDueState', () => {
   it('normaliza datas antigas com o ano de referência e exibe o ano', () => {
     expect(normalizeDueDate('24 set', referenceDate)).toBe('2026-09-24')
     expect(formatDueDate('2027-09-24', referenceDate)).toBe('24 set 2027')
+  })
+})
+
+describe('Brazilian date formatting', () => {
+  it('formats dates as dd/mm/yyyy for display and input', () => {
+    expect(formatDateForDisplay('2026-09-14')).toBe('14/09/2026')
+    expect(formatDateForInput('2026-09-14')).toBe('14/09/2026')
+  })
+
+  it('parses valid Brazilian dates and rejects impossible dates', () => {
+    expect(parseBrazilianDate('14/09/2026')).toBe('2026-09-14')
+    expect(parseBrazilianDate('31/02/2026')).toBeNull()
   })
 })
 

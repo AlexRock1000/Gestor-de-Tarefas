@@ -1,5 +1,5 @@
 import { Check, Clipboard } from 'lucide-react'
-import { formatDueDate, getDueState, getPriorityBand } from '../taskUtils'
+import { formatDateForDisplay, formatDueDate, getDueState, getPriorityBand } from '../taskUtils'
 import type { Task } from '../types'
 
 type TaskCardProps = {
@@ -60,7 +60,7 @@ export function TaskCard({
         <div className="task-meta">
           <span>{task.responsible}</span>
           <span>•</span>
-          <span>{task.createdAt}</span>
+          <span>{formatDateForDisplay(task.createdAt)}</span>
         </div>
       </div>
 

@@ -1,32 +1,30 @@
 import { useEffect, useState } from 'react'
 import { Check, Clipboard, X } from 'lucide-react'
-import { computeScore, getImportanceCategory, getImportanceValue, getPriorityBand, getPriorityLabel, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
-import type { Task } from '../types'
+import { computeScore, formatDateForDisplay, getImportanceCategory, getImportanceValue, getPriorityBand, getPriorityLabel, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
+import type { Phase, Task } from '../types'
+import { BrazilianDateInput } from './BrazilianDateInput'
 
 type TaskDetailDrawerProps = {
   task: Task
+  phases: { name: Phase; tone: string; accent: string }[]
   copiedTaskId: number | null
-  dueToInputValue: (due: string) => string
-  inputValueToDue: (value: string) => string
   onClose: () => void
   onDeleteTask: () => void
   onCopyPrompt: (task: Task) => void
-  onEditTask: () => void
   onConfirmChanges: (task: Task) => void
 }
 
 export function TaskDetailDrawer({
   task,
+  phases,
   copiedTaskId,
-  dueToInputValue,
-  inputValueToDue,
   onClose,
   onDeleteTask,
   onCopyPrompt,
-  onEditTask,
   onConfirmChanges,
 }: TaskDetailDrawerProps) {
   const [draftTask, setDraftTask] = useState(task)
+  const [isEditing, setIsEditing] = useState(false)
 
   useEffect(() => {
     setDraftTask(task)
@@ -59,11 +57,28 @@ export function TaskDetailDrawer({
     }}>
       <section className="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="task-detail-title">
         <div className="drawer-top">
-          <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
+          <div className="drawer-task-tags">
+            {isEditing ? (
+              <select className="drawer-phase-select" value={draftTask.phase} onChange={(event) => updateDraft('phase', event.target.value as Phase)} aria-label="Fase da tarefa">
+                {phases.map((phase) => <option key={phase.name} value={phase.name}>{phase.name}</option>)}
+              </select>
+            ) : <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>}
+            {isEditing ? (
+              <input className="drawer-tag-input" value={draftTask.tag} onChange={(event) => updateDraft('tag', event.target.value)} aria-label="Tag da tarefa" />
+            ) : <span className="task-label">{task.tag}</span>}
+          </div>
           <button className="icon-button" onClick={onClose} aria-label="Fechar detalhes"><X size={18} /></button>
         </div>
 
-      <h2 id="task-detail-title">{task.title}</h2>
+      {isEditing ? (
+        <input
+          id="task-detail-title"
+          className="drawer-title-input"
+          value={draftTask.title}
+          onChange={(event) => updateDraft('title', event.target.value)}
+          aria-label="Título da tarefa"
+        />
+      ) : <h2 id="task-detail-title">{task.title}</h2>}
       <p className="drawer-description">
         {task.observacoes || 'Organize os próximos passos e acompanhe o avanço desta frente operacional.'}
       </p>
@@ -75,22 +90,20 @@ export function TaskDetailDrawer({
         </div>
         <label className="drawer-status">
           <span>Prazo</span>
-          <input
-            type="date"
-            value={dueToInputValue(draftTask.due)}
-            onChange={(event) => updateDraft('due', inputValueToDue(event.target.value))}
-          />
+          <BrazilianDateInput value={draftTask.due} onChange={(value) => updateDraft('due', value)} readOnly={!isEditing} />
         </label>
       </div>
 
       <div className="drawer-meta-grid">
         <div className="drawer-meta-card">
           <span>Responsável</span>
-          <strong>{draftTask.responsible}</strong>
+          {isEditing ? (
+            <input value={draftTask.responsible} onChange={(event) => updateDraft('responsible', event.target.value)} aria-label="Responsável" />
+          ) : <strong>{draftTask.responsible}</strong>}
         </div>
         <div className="drawer-meta-card">
           <span>Criada em</span>
-          <strong>{draftTask.createdAt}</strong>
+          <strong>{formatDateForDisplay(draftTask.createdAt)}</strong>
         </div>
       </div>
 
@@ -106,6 +119,7 @@ export function TaskDetailDrawer({
             <select
               value={getImportanceCategory(draftTask.importancia)}
               onChange={(event) => updateDraft('importancia', getImportanceValue(event.target.value as 'Baixa' | 'Alta' | 'Extrema'))}
+                disabled={!isEditing}
             >
               <option value="Extrema">Extrema</option>
               <option value="Alta">Alta</option>
@@ -117,6 +131,7 @@ export function TaskDetailDrawer({
             <select
               value={getUrgencyCategory(draftTask.urgencia)}
               onChange={(event) => updateDraft('urgencia', getUrgencyValue(event.target.value as 'Pouca' | 'Media' | 'Muita'))}
+                disabled={!isEditing}
             >
               <option value="Muita">Muita</option>
               <option value="Media">Media</option>
@@ -142,12 +157,12 @@ export function TaskDetailDrawer({
           <span>{draftTask.checklist.filter((item) => item.done).length}/{draftTask.checklist.length}</span>
         </div>
 
-        <button className="secondary-button add-item-button" onClick={() => setDraftTask((current) => ({
+        {isEditing && <button className="secondary-button add-item-button" onClick={() => setDraftTask((current) => ({
           ...current,
           checklist: [...current.checklist, { label: `Novo item ${current.checklist.length + 1}`, done: false }],
         }))}>
           + Adicionar item
-        </button>
+        </button>}
 
         {draftTask.checklist.map((item, index) => (
           <div className="check-item-row" key={`${draftTask.id}-checklist-${index}`}>
@@ -156,6 +171,7 @@ export function TaskDetailDrawer({
                 type="checkbox"
                 checked={item.done}
                 onChange={() => toggleDraftChecklist(index)}
+                disabled={!isEditing}
               />
               <input
                 value={item.label}
@@ -166,14 +182,15 @@ export function TaskDetailDrawer({
                   ),
                 }))}
                 className="check-item-input"
+                readOnly={!isEditing}
               />
             </label>
-            <button className="remove-item-button" onClick={() => setDraftTask((current) => ({
+            {isEditing && <button className="remove-item-button" onClick={() => setDraftTask((current) => ({
               ...current,
               checklist: current.checklist.filter((_, checkIndex) => checkIndex !== index),
             }))} aria-label="Remover item">
               ×
-            </button>
+            </button>}
           </div>
         ))}
       </div>
@@ -187,16 +204,25 @@ export function TaskDetailDrawer({
           value={draftTask.observacoes}
           onChange={(event) => updateDraft('observacoes', event.target.value)}
           rows={8}
+          readOnly={!isEditing}
         />
       </div>
 
       <div className="drawer-actions">
-        <button className="secondary-button" onClick={onEditTask}>
-          Editar tarefa
-        </button>
-          <button className="confirm-button" onClick={() => onConfirmChanges(draftTask)}>
-            <Check size={15} /> Confirmar alterações
+        {isEditing ? (
+          <>
+            <button className="secondary-button" onClick={() => { setDraftTask(task); setIsEditing(false) }}>
+              Cancelar edição
+            </button>
+            <button className="confirm-button" disabled={!draftTask.title.trim() || !draftTask.responsible.trim()} onClick={() => { onConfirmChanges(draftTask); setIsEditing(false) }}>
+              <Check size={15} /> Salvar alterações
+            </button>
+          </>
+        ) : (
+          <button className="secondary-button" onClick={() => setIsEditing(true)}>
+            Editar tarefa
           </button>
+        )}
         <button className="danger-button" onClick={onDeleteTask}>
           Excluir tarefa
         </button>

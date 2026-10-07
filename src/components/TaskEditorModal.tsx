@@ -1,7 +1,8 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { getImportanceCategory, getImportanceValue, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
+import { formatDateForDisplay, getImportanceCategory, getImportanceValue, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
 import type { Phase, Task } from '../types'
+import { BrazilianDateInput } from './BrazilianDateInput'
 
 type TaskEditorModalProps = {
   editingTask: Task
@@ -10,8 +11,6 @@ type TaskEditorModalProps = {
   onFieldChange: <K extends keyof Task>(field: K, value: Task[K]) => void
   onSave: () => void
   isCreatingTask: boolean
-  dueToInputValue: (due: string) => string
-  inputValueToDue: (value: string) => string
 }
 
 export function TaskEditorModal({
@@ -21,8 +20,6 @@ export function TaskEditorModal({
   onFieldChange,
   onSave,
   isCreatingTask,
-  dueToInputValue,
-  inputValueToDue,
 }: TaskEditorModalProps) {
   const titleInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -89,11 +86,7 @@ export function TaskEditorModal({
           <div className="modal-grid">
             <label className="field">
               <span>Prazo</span>
-              <input
-                type="date"
-                value={dueToInputValue(editingTask.due)}
-                onChange={(event) => onFieldChange('due', inputValueToDue(event.target.value))}
-              />
+              <BrazilianDateInput value={editingTask.due} onChange={(value) => onFieldChange('due', value)} />
             </label>
             <label className="field">
               <span>Responsável</span>
@@ -109,7 +102,7 @@ export function TaskEditorModal({
           <div className="modal-grid">
             <label className="field">
               <span>Criada em</span>
-              <input value={editingTask.createdAt} readOnly aria-readonly="true" />
+              <input value={formatDateForDisplay(editingTask.createdAt)} readOnly aria-readonly="true" />
             </label>
 
             <label className="field">

@@ -30,8 +30,6 @@ import { TaskDetailDrawer } from './components/TaskDetailDrawer'
 import { TaskEditorModal } from './components/TaskEditorModal'
 import {
   dueStateLabels,
-  dueToInputValue,
-  inputValueToDue,
   phases,
   statusOrder,
   useTaskBoard,
@@ -908,20 +906,14 @@ function App() {
       {selectedTask && (
         <TaskDetailDrawer
           task={selectedTask}
+          phases={phases}
           copiedTaskId={copiedTaskId}
-          dueToInputValue={dueToInputValue}
-          inputValueToDue={inputValueToDue}
           onClose={() => setSelectedTaskId(null)}
           onDeleteTask={handleDeleteSelectedTask}
           onCopyPrompt={(task) => void copyPrompt(task)}
-          onEditTask={() => {
-            setIsCreatingTask(false)
-            setEditingTask({ ...selectedTask })
-          }}
           onConfirmChanges={(task) => {
             saveTaskChanges(task)
             showToast('Alterações confirmadas')
-            setSelectedTaskId(null)
           }}
         />
       )}
@@ -937,8 +929,6 @@ function App() {
           }}
           onFieldChange={(field, value) => setEditingTask({ ...editingTask, [field]: value })}
           onSave={handleSaveEditedTask}
-          dueToInputValue={dueToInputValue}
-          inputValueToDue={inputValueToDue}
         />
       )}
     </div>

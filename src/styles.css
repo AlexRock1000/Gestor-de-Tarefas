@@ -624,6 +624,7 @@ h1 span {
 
 .dark-theme .drawer-status select,
 .dark-theme .drawer-status input[type="date"],
+.dark-theme .drawer-status input[type="text"],
 .dark-theme .drawer-status,
 .dark-theme .gut-box,
 .dark-theme .prompt-button.large {
@@ -645,6 +646,9 @@ h1 span {
 .dark-theme .field textarea,
 .dark-theme .gut-field input,
 .dark-theme .gut-field select,
+.dark-theme .drawer-phase-select,
+.dark-theme .drawer-tag-input,
+.dark-theme .drawer-meta-card input,
 .dark-theme .notes-section textarea {
   background: #0f1717;
   color: #edf3f1;
@@ -665,6 +669,11 @@ h1 span {
 .dark-theme .detail-drawer {
   background: #111d1d;
   border-left-color: rgba(170, 188, 185, 0.18);
+}
+
+.dark-theme .drawer-meta-card {
+  background: #1d2f2e;
+  border-color: rgba(170, 188, 185, 0.16);
 }
 
 .dark-theme .modal-card {
@@ -790,6 +799,7 @@ h1 span {
 .dark-theme .drawer-section-head h3,
 .dark-theme .modal-header h3,
 .dark-theme .detail-drawer h2,
+.dark-theme .drawer-title-input,
 .dark-theme .section-heading h2,
 .dark-theme .panel-header h2,
 .dark-theme h1,
@@ -1645,10 +1655,40 @@ h2 {
   overflow-y: auto;
 }
 .drawer-top { display: flex; justify-content: space-between; align-items: center; }
+.drawer-task-tags { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .detail-drawer h2 {
   font-size: 30px;
   line-height: 1.15;
   margin: 28px 0 10px;
+}
+.drawer-title-input {
+  display: block;
+  width: 100%;
+  margin: 28px 0 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ink);
+  font: 600 30px/1.15 'Space Grotesk';
+}
+.drawer-phase-select,
+.drawer-tag-input,
+.drawer-meta-card input {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 8px 10px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+}
+.drawer-phase-select { font-size: 12px; }
+.drawer-tag-input { width: 150px; font-size: 12px; }
+.drawer-meta-card input { width: 100%; font-size: 14px; font-weight: 600; }
+.detail-drawer .gut-field select:disabled {
+  opacity: 1;
+  cursor: default;
 }
 .drawer-description {
   color: #929790;
@@ -1703,7 +1743,8 @@ h2 {
   color: var(--ink);
 }
 .drawer-status select,
-.drawer-status input[type="date"] {
+.drawer-status input[type="date"],
+.drawer-status input[type="text"] {
   width: 100%;
   min-width: 0;
   border: 0;
