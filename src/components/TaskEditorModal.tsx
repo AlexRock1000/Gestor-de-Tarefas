@@ -1,11 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import { getImportanceCategory, getImportanceValue } from '../taskUtils'
+import { getImportanceCategory, getImportanceValue, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
 import type { Phase, Task } from '../types'
-
-const priorityFactors = [
-  { field: 'urgencia', label: 'Urgência' },
-] as const
 
 type TaskEditorModalProps = {
   editingTask: Task
@@ -134,22 +130,17 @@ export function TaskEditorModal({
                 <option value="Extrema">Extrema</option>
               </select>
             </label>
-            {priorityFactors.map(({ field, label }) => (
-              <label key={field} className="gut-field">
-                <span>{label}</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={5}
-                  value={editingTask[field]}
-                  onChange={(event) => {
-                    const nextValue = Number(event.target.value)
-                    const safeValue = Number.isNaN(nextValue) ? 1 : Math.min(5, Math.max(1, nextValue))
-                    onFieldChange(field, safeValue)
-                  }}
-                />
-              </label>
-            ))}
+            <label className="gut-field">
+              <span>Urgência</span>
+              <select
+                value={getUrgencyCategory(editingTask.urgencia)}
+                onChange={(event) => onFieldChange('urgencia', getUrgencyValue(event.target.value as 'Pouca' | 'Media' | 'Muita'))}
+              >
+                <option value="Pouca">Pouca</option>
+                <option value="Media">Media</option>
+                <option value="Muita">Muita</option>
+              </select>
+            </label>
           </div>
 
           <label className="field">

@@ -6,6 +6,8 @@ import {
   getDueState,
   getImportanceCategory,
   getImportanceValue,
+  getUrgencyCategory,
+  getUrgencyValue,
   getPriorityBand,
   getPriorityLabel,
   normalizeDueDate,
@@ -34,6 +36,22 @@ describe('importance categories', () => {
     expect(getImportanceValue('Baixa')).toBe(2)
     expect(getImportanceValue('Alta')).toBe(4)
     expect(getImportanceValue('Extrema')).toBe(5)
+  })
+})
+
+describe('urgency categories', () => {
+  it('groups urgency scores into little, medium and much categories', () => {
+    expect(getUrgencyCategory(1)).toBe('Pouca')
+    expect(getUrgencyCategory(2)).toBe('Pouca')
+    expect(getUrgencyCategory(3)).toBe('Media')
+    expect(getUrgencyCategory(4)).toBe('Media')
+    expect(getUrgencyCategory(5)).toBe('Muita')
+  })
+
+  it('maps each category to a representative score', () => {
+    expect(getUrgencyValue('Pouca')).toBe(2)
+    expect(getUrgencyValue('Media')).toBe(4)
+    expect(getUrgencyValue('Muita')).toBe(5)
   })
 })
 

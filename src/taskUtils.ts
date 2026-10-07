@@ -130,6 +130,20 @@ export const getImportanceValue = (category: ImportanceCategory) => ({
   Extrema: 5,
 })[category]
 
+export type UrgencyCategory = 'Pouca' | 'Media' | 'Muita'
+
+export const getUrgencyCategory = (urgency: number): UrgencyCategory => {
+  if (urgency <= 2) return 'Pouca'
+  if (urgency <= 4) return 'Media'
+  return 'Muita'
+}
+
+export const getUrgencyValue = (category: UrgencyCategory) => ({
+  Pouca: 2,
+  Media: 4,
+  Muita: 5,
+})[category]
+
 export const CRITICAL_PRIORITY_THRESHOLD = 20
 export const HIGH_PRIORITY_THRESHOLD = 12
 
