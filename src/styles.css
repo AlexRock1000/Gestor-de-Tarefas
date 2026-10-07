@@ -570,6 +570,7 @@ h1 span {
 .dark-theme .field input,
 .dark-theme .field select,
 .dark-theme .gut-field input,
+.dark-theme .gut-field select,
 .dark-theme .notes-section textarea,
 .dark-theme .search-box,
 .dark-theme .search-box input,
@@ -643,6 +644,7 @@ h1 span {
 .dark-theme .field select,
 .dark-theme .field textarea,
 .dark-theme .gut-field input,
+.dark-theme .gut-field select,
 .dark-theme .notes-section textarea {
   background: #0f1717;
   color: #edf3f1;
@@ -1876,7 +1878,8 @@ h2 {
   color: #6a756f;
   text-transform: capitalize;
 }
-.gut-field input {
+.gut-field input,
+.gut-field select {
   border: 1px solid #dfe2db;
   border-radius: 6px;
   padding: 8px 7px;
@@ -1885,6 +1888,11 @@ h2 {
   font-weight: 700;
   font-size: 16px;
   color: var(--ink);
+}
+
+.gut-field select {
+  font-size: 13px;
+  min-height: 36px;
 }
 
 .gut-box {

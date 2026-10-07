@@ -4,6 +4,8 @@ import {
   describeRequestError,
   formatDueDate,
   getDueState,
+  getImportanceCategory,
+  getImportanceValue,
   getPriorityBand,
   getPriorityLabel,
   normalizeDueDate,
@@ -16,6 +18,22 @@ describe('computeScore', () => {
     expect(computeScore(5, 4)).toBe(20)
     expect(computeScore(5, 5)).toBe(25)
     expect(computeScore(3, 3)).toBe(9)
+  })
+})
+
+describe('importance categories', () => {
+  it('groups importance scores into low, high and extreme categories', () => {
+    expect(getImportanceCategory(1)).toBe('Baixa')
+    expect(getImportanceCategory(2)).toBe('Baixa')
+    expect(getImportanceCategory(3)).toBe('Alta')
+    expect(getImportanceCategory(4)).toBe('Alta')
+    expect(getImportanceCategory(5)).toBe('Extrema')
+  })
+
+  it('maps each category to a representative score', () => {
+    expect(getImportanceValue('Baixa')).toBe(2)
+    expect(getImportanceValue('Alta')).toBe(4)
+    expect(getImportanceValue('Extrema')).toBe(5)
   })
 })
 

@@ -116,6 +116,20 @@ export const parseCsv = (content: string): string[][] => {
 export const computeScore = (importancia: number, urgencia: number) =>
   importancia * urgencia
 
+export type ImportanceCategory = 'Baixa' | 'Alta' | 'Extrema'
+
+export const getImportanceCategory = (importance: number): ImportanceCategory => {
+  if (importance <= 2) return 'Baixa'
+  if (importance <= 4) return 'Alta'
+  return 'Extrema'
+}
+
+export const getImportanceValue = (category: ImportanceCategory) => ({
+  Baixa: 2,
+  Alta: 4,
+  Extrema: 5,
+})[category]
+
 export const CRITICAL_PRIORITY_THRESHOLD = 20
 export const HIGH_PRIORITY_THRESHOLD = 12
 

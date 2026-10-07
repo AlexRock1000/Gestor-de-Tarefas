@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { Check, Clipboard, X } from 'lucide-react'
-import { computeScore, getPriorityBand, getPriorityLabel } from '../taskUtils'
+import { computeScore, getImportanceCategory, getImportanceValue, getPriorityBand, getPriorityLabel } from '../taskUtils'
 import type { Task } from '../types'
 
 const priorityFactors = [
-  { field: 'importancia', label: 'Importância' },
   { field: 'urgencia', label: 'Urgência' },
 ] as const
 
@@ -106,6 +105,17 @@ export function TaskDetailDrawer({
         </div>
 
         <div className="gut-grid">
+          <label className="gut-field">
+            <span>Importância</span>
+            <select
+              value={getImportanceCategory(draftTask.importancia)}
+              onChange={(event) => updateDraft('importancia', getImportanceValue(event.target.value as 'Baixa' | 'Alta' | 'Extrema'))}
+            >
+              <option value="Baixa">Baixa</option>
+              <option value="Alta">Alta</option>
+              <option value="Extrema">Extrema</option>
+            </select>
+          </label>
           {priorityFactors.map(({ field, label }) => (
             <label key={field} className="gut-field">
               <span>{label}</span>

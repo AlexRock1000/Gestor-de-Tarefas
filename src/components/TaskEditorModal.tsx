@@ -1,9 +1,9 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
+import { getImportanceCategory, getImportanceValue } from '../taskUtils'
 import type { Phase, Task } from '../types'
 
 const priorityFactors = [
-  { field: 'importancia', label: 'Importância' },
   { field: 'urgencia', label: 'Urgência' },
 ] as const
 
@@ -123,6 +123,17 @@ export function TaskEditorModal({
           </div>
 
           <div className="gut-grid">
+            <label className="gut-field">
+              <span>Importância</span>
+              <select
+                value={getImportanceCategory(editingTask.importancia)}
+                onChange={(event) => onFieldChange('importancia', getImportanceValue(event.target.value as 'Baixa' | 'Alta' | 'Extrema'))}
+              >
+                <option value="Baixa">Baixa</option>
+                <option value="Alta">Alta</option>
+                <option value="Extrema">Extrema</option>
+              </select>
+            </label>
             {priorityFactors.map(({ field, label }) => (
               <label key={field} className="gut-field">
                 <span>{label}</span>
