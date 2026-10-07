@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2'
-import { pool } from './db'
+import { pool, usesLegacyTaskPriorityColumns } from './db'
 
 export type TaskStatus = 'Pendente' | 'Em Andamento' | 'Concluído'
 export type TaskPhase = 'Estoque' | 'Documentação' | 'Processos' | 'Automações'
@@ -35,8 +35,12 @@ type TaskWrite = Omit<Task, 'id'>
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const seedFilePath = path.join(projectRoot, 'server', 'data', 'tasks.json')
-const columns = '`title`, `phase`, `status`, `due`, `createdAt`, `responsible`, `importancia`, `urgencia`, `scoreGut`, `tag`, `checklist`, `promptIa`, `observacoes`'
-const values = '?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?'
+const taskColumns = () => [
+  '`title`', '`phase`', '`status`', '`due`', '`createdAt`', '`responsible`',
+  usesLegacyTaskPriorityColumns ? '`gravidade`' : '`importancia`',
+  '`urgencia`', '`scoreGut`', '`tag`', '`checklist`', '`promptIa`', '`observacoes`',
+].join(', ')
+const placeholders = () => Array(taskColumns().split(', ').length).fill('?').join(', ')
 
 const mapTask = (row: TaskRow): Task => ({
   id: Number(row.id),
@@ -48,7 +52,7 @@ const mapTask = (row: TaskRow): Task => ({
   responsible: row.responsible,
   importancia: Number(row.importancia ?? row.gravidade ?? 3),
   urgencia: Number(row.urgencia),
-  scoreGut: Number(row.scoreGut),
+  scoreGut: Number(row.importancia ?? row.gravidade ?? 3) * Number(row.urgencia),
   tag: row.tag,
   checklist: typeof row.checklist === 'string' ? JSON.parse(row.checklist) as Task['checklist'] : row.checklist,
   promptIa: row.promptIa,
@@ -98,7 +102,7 @@ export const seedTasksIfEmpty = async () => {
         promptIa: task.promptIa,
         observacoes: task.observacoes,
       }
-      await connection.execute(`INSERT INTO tasks (id, ${columns}) VALUES (?, ${values})`, [task.id, ...writeValues(taskWrite)])
+      await connection.execute(`INSERT INTO tasks (id, ${taskColumns()}) VALUES (?, ${placeholders()})`, [task.id, ...writeValues(taskWrite)])
     }
     await connection.commit()
   } catch (error) {
@@ -110,8 +114,8 @@ export const seedTasksIfEmpty = async () => {
 }
 
 export const listTasks = async (): Promise<Task[]> => {
-  const [rows] = await pool.query<TaskRow[]>('SELECT * FROM tasks ORDER BY scoreGut DESC, id ASC')
-  return rows.map(mapTask)
+  const [rows] = await pool.query<TaskRow[]>('SELECT * FROM tasks ORDER BY id ASC')
+  return rows.map(mapTask).sort((left, right) => right.scoreGut - left.scoreGut || left.id - right.id)
 }
 
 export const findTask = async (id: number): Promise<Task | null> => {
@@ -120,7 +124,7 @@ export const findTask = async (id: number): Promise<Task | null> => {
 }
 
 export const createTask = async (task: TaskWrite): Promise<Task> => {
-  const [result] = await pool.execute<ResultSetHeader>(`INSERT INTO tasks (${columns}) VALUES (${values})`, writeValues(task))
+  const [result] = await pool.execute<ResultSetHeader>(`INSERT INTO tasks (${taskColumns()}) VALUES (${placeholders()})`, writeValues(task))
   return { ...task, id: result.insertId }
 }
 
@@ -133,7 +137,7 @@ export const createTasks = async (tasks: TaskWrite[]): Promise<Task[]> => {
     const createdTasks: Task[] = []
     for (const task of tasks) {
       const [result] = await connection.execute<ResultSetHeader>(
-        `INSERT INTO tasks (${columns}) VALUES (${values})`,
+        `INSERT INTO tasks (${taskColumns()}) VALUES (${placeholders()})`,
         writeValues(task),
       )
       createdTasks.push({ ...task, id: result.insertId })
@@ -149,7 +153,7 @@ export const createTasks = async (tasks: TaskWrite[]): Promise<Task[]> => {
 }
 
 export const updateTask = async (id: number, task: TaskWrite): Promise<Task | null> => {
-  const assignments = columns.split(', ').map((column) => `${column} = ?`).join(', ')
+  const assignments = taskColumns().split(', ').map((column) => `${column} = ?`).join(', ')
   const [result] = await pool.query<ResultSetHeader>(`UPDATE tasks SET ${assignments} WHERE id = ?`, [...writeValues(task), id])
   return result.affectedRows ? { ...task, id } : null
 }
