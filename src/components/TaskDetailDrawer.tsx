@@ -107,9 +107,9 @@ export function TaskDetailDrawer({
               value={getImportanceCategory(draftTask.importancia)}
               onChange={(event) => updateDraft('importancia', getImportanceValue(event.target.value as 'Baixa' | 'Alta' | 'Extrema'))}
             >
-              <option value="Baixa">Baixa</option>
-              <option value="Alta">Alta</option>
               <option value="Extrema">Extrema</option>
+              <option value="Alta">Alta</option>
+              <option value="Baixa">Baixa</option>
             </select>
           </label>
           <label className="gut-field">
@@ -118,9 +118,9 @@ export function TaskDetailDrawer({
               value={getUrgencyCategory(draftTask.urgencia)}
               onChange={(event) => updateDraft('urgencia', getUrgencyValue(event.target.value as 'Pouca' | 'Media' | 'Muita'))}
             >
-              <option value="Pouca">Pouca</option>
-              <option value="Media">Media</option>
               <option value="Muita">Muita</option>
+              <option value="Media">Media</option>
+              <option value="Pouca">Pouca</option>
             </select>
           </label>
         </div>
