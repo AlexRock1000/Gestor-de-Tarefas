@@ -1923,12 +1923,19 @@ h2 {
 
 .notes-section textarea {
   width: 100%;
+  min-height: 220px;
   border: 1px solid #e0e3dd;
   border-radius: 8px;
   padding: 10px 12px;
   background: #fff;
   color: var(--ink);
   font-size: 14px;
+  line-height: 1.5;
+}
+
+.annotation-input {
+  min-height: 220px;
+  line-height: 1.5;
 }
 
 .modal-overlay {

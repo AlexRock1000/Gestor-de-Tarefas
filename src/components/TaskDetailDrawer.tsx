@@ -183,9 +183,10 @@ export function TaskDetailDrawer({
           <h3>Anotações</h3>
         </div>
         <textarea
+          className="annotation-input"
           value={draftTask.observacoes}
           onChange={(event) => updateDraft('observacoes', event.target.value)}
-          rows={4}
+          rows={8}
         />
       </div>
 

@@ -145,7 +145,7 @@ export function TaskEditorModal({
 
           <label className="field">
             <span>Anotações</span>
-            <textarea rows={3} value={editingTask.observacoes} onChange={(event) => onFieldChange('observacoes', event.target.value)} />
+            <textarea className="annotation-input" rows={8} value={editingTask.observacoes} onChange={(event) => onFieldChange('observacoes', event.target.value)} />
           </label>
         </div>
 
