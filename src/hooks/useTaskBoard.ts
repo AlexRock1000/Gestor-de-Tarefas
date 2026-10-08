@@ -461,8 +461,21 @@ export function useTaskBoard() {
     const checklist = task.checklist.map((item, index) =>
       index === itemIndex ? { ...item, done: !item.done } : item,
     )
-    void updateTask(taskId, { checklist })
-    void recordActivity({ actor: 'Daniel', tone: 'coral', message: 'atualizou o checklist de', taskTitle: task.title, time: 'Agora' })
+    const wasChecklistComplete = task.checklist.length > 0 && task.checklist.every((item) => item.done)
+    const isChecklistComplete = checklist.length > 0 && checklist.every((item) => item.done)
+    const completesTask = isChecklistComplete && task.status !== 'Concluído'
+    const reopensTask = wasChecklistComplete && !isChecklistComplete && task.status === 'Concluído'
+    const status: Status = completesTask ? 'Concluído' : reopensTask ? 'Pendente' : task.status
+    const due = completesTask || reopensTask ? resolveDueForStatus(status, task.due) : task.due
+
+    void updateTask(taskId, { checklist, status, due })
+    void recordActivity({
+      actor: 'Daniel',
+      tone: completesTask ? 'teal' : 'coral',
+      message: completesTask ? 'concluiu ao finalizar o checklist de' : reopensTask ? 'reabriu ao desmarcar o checklist de' : 'atualizou o checklist de',
+      taskTitle: task.title,
+      time: 'Agora',
+    })
   }
 
   const addTask = () => {

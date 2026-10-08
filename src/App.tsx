@@ -122,6 +122,7 @@ function App() {
     clearFilters,
     saveTaskChanges,
     updateStatus,
+    toggleChecklist,
     handleKanbanDrop,
     addTask,
     deleteTask,
@@ -621,9 +622,13 @@ function App() {
               task={task}
               selectedTaskId={selectedTaskId}
               copiedTaskId={copiedTaskId}
-              onSelect={setSelectedTaskId}
               onToggleStatus={handleToggleTaskStatus}
-              onEdit={setEditingTask}
+                        onToggleChecklist={toggleChecklist}
+              onEdit={(taskToEdit) => {
+                setSelectedTaskId(null)
+                setIsCreatingTask(false)
+                setEditingTask({ ...taskToEdit })
+              }}
               onCopyPrompt={copyPrompt}
             />
           ))}

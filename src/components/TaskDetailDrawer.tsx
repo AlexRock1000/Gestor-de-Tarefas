@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Check, Clipboard, X } from 'lucide-react'
-import { computeScore, formatDateForDisplay, getImportanceCategory, getImportanceValue, getPriorityBand, getPriorityLabel, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
+import { computeScore, formatDateForDisplay, getImportanceCategory, getImportanceValue, getPriorityBand, getPriorityLabel, getUrgencyCategory, getUrgencyValue, resolveDueForStatus } from '../taskUtils'
 import type { Phase, Task } from '../types'
 import { BrazilianDateInput } from './BrazilianDateInput'
 
@@ -41,12 +41,21 @@ export function TaskDetailDrawer({
   }
 
   const toggleDraftChecklist = (itemIndex: number) => {
-    setDraftTask((current) => ({
-      ...current,
-      checklist: current.checklist.map((item, index) =>
+    setDraftTask((current) => {
+      const checklist = current.checklist.map((item, index) =>
         index === itemIndex ? { ...item, done: !item.done } : item,
-      ),
-    }))
+      )
+      const allDone = checklist.length > 0 && checklist.every((item) => item.done)
+      const previouslyAllDone = current.checklist.length > 0 && current.checklist.every((item) => item.done)
+      const status = allDone ? 'Concluído' : previouslyAllDone && current.status === 'Concluído' ? 'Pendente' : current.status
+
+      return {
+        ...current,
+        checklist,
+        status,
+        due: status !== current.status ? resolveDueForStatus(status, current.due) : current.due,
+      }
+    })
   }
 
   return (
