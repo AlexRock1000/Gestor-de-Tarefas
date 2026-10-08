@@ -23,15 +23,13 @@ import {
   Target,
   Upload,
 } from 'lucide-react'
-import { getDueState, getPriorityBand } from './taskUtils'
+import { CRITICAL_PRIORITY_THRESHOLD, getDueState, getPriorityBand } from './taskUtils'
 import type { DeadlineFilter, GutFilter } from './types'
 import { TaskCard } from './components/TaskCard'
 import { TaskDetailDrawer } from './components/TaskDetailDrawer'
 import { TaskEditorModal } from './components/TaskEditorModal'
 import {
   dueStateLabels,
-  dueToInputValue,
-  inputValueToDue,
   phases,
   statusOrder,
   useTaskBoard,
@@ -124,6 +122,7 @@ function App() {
     clearFilters,
     saveTaskChanges,
     updateStatus,
+    toggleChecklist,
     handleKanbanDrop,
     addTask,
     deleteTask,
@@ -133,6 +132,10 @@ function App() {
     saveEditedTask,
     tasks,
     getDueState,
+    isLoadingTasks,
+    isLoadingActivities,
+    syncError,
+    syncFromServer,
   } = useTaskBoard()
 
   useEffect(() => {
@@ -248,10 +251,9 @@ function App() {
       return
     }
 
-    const currentStatusIndex = statusOrder.indexOf(task.status)
-    const nextStatus = statusOrder[(currentStatusIndex + 1) % statusOrder.length]
+    const nextStatus = task.status === 'Concluído' ? 'Pendente' : 'Concluído'
     updateStatus(taskId, nextStatus)
-    showToast(`Status atualizado para ${nextStatus}`)
+    showToast(nextStatus === 'Concluído' ? 'Tarefa marcada como feita' : 'Tarefa reaberta')
   }
 
   const profileInitials = profileName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'DR'
@@ -387,17 +389,19 @@ function App() {
           <strong>Nenhuma atividade registrada</strong>
           <span>As ações realizadas nas tarefas aparecerão aqui.</span>
         </div>
-      ) : <div className="history-list">
-        {activities.map((activity) => (
-          <article className="history-item" key={activity.id}>
-            <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
-            <div className="history-item-copy">
-              <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
-              <span>{activity.time}</span>
-            </div>}
-          </article>
-        ))}
-      </div>
+      ) : (
+        <div className="history-list">
+          {activities.map((activity) => (
+            <article className="history-item" key={activity.id}>
+              <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
+              <div className="history-item-copy">
+                <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
+                <span>{activity.time}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   )
 
@@ -490,7 +494,7 @@ function App() {
                 >
                   <div className="kanban-card-top">
                     <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
-                    <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>GUT {task.scoreGut}</span>
+                    <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>Prioridade {task.scoreGut}</span>
                   </div>
 
                   <strong>{task.title}</strong>
@@ -536,7 +540,7 @@ function App() {
                 >
                   <span>{item.label}</span>
                   {item.value === 'Hoje' && <strong>{tasks.filter((task) => getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
-                  {item.value === 'Urgentes' && <strong>{tasks.filter((task) => task.scoreGut >= 80 || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
+                  {item.value === 'Urgentes' && <strong>{tasks.filter((task) => task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
                   {item.value === 'Concluídas' && <strong>{tasks.filter((task) => task.status === 'Concluído').length}</strong>}
                 </button>
               ))}
@@ -550,50 +554,52 @@ function App() {
               </button>
             </div>
 
-            {filtersExpanded && <div className="filters-expanded">
-              <div className="filter-tabs">
-                <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
-                {phases.map((phase) => (
-                  <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
-                ))}
-              </div>
-
-              <div className="status-tabs">
-                <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
-                {statusOrder.map((status) => (
-                  <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
-                ))}
-              </div>
-
-              <div className="advanced-filters">
-              <label>
-                Responsável
-                <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
-                  <option value="Todos">Todos</option>
-                  {responsibleOptions.map((responsible) => (
-                    <option key={responsible} value={responsible}>{responsible}</option>
+            {filtersExpanded && (
+              <div className="filters-expanded">
+                <div className="filter-tabs">
+                  <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
+                  {phases.map((phase) => (
+                    <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
                   ))}
-                </select>
-              </label>
-              <label>
-                Prazo
-                <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as any)}>
-                  <option value="Todos">Todos</option>
-                  <option value="Em aberto">Em aberto</option>
-                  <option value="Concluídas">Concluídas</option>
-                </select>
-              </label>
-              <label>
-                Prioridade
-                <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as any)}>
-                  <option value="Todos">Todas</option>
-                  <option value="Críticas (80+)">Críticas</option>
-                  <option value="Altas (50-79)">Altas</option>
-                  <option value="Baixas (até 49)">Baixas</option>
-                </select>
-              </label>
+                </div>
+
+                <div className="status-tabs">
+                  <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
+                  {statusOrder.map((status) => (
+                    <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                  ))}
+                </div>
+
+                <div className="advanced-filters">
+                  <label>
+                    Responsável
+                    <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
+                      <option value="Todos">Todos</option>
+                      {responsibleOptions.map((responsible) => (
+                        <option key={responsible} value={responsible}>{responsible}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Prazo
+                    <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as any)}>
+                      <option value="Todos">Todos</option>
+                      <option value="Em aberto">Em aberto</option>
+                      <option value="Concluídas">Concluídas</option>
+                    </select>
+                  </label>
+                  <label>
+                    Prioridade
+                    <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as any)}>
+                      <option value="Todos">Todas</option>
+                      <option value="Críticas (20+)">Críticas</option>
+                      <option value="Altas (12-19)">Altas</option>
+                      <option value="Baixas (até 11)">Baixas</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-            </div>}
+            )}
 
             <div className="filter-summary">
               <span>{visibleTasks.length} de {tasks.length} tarefas</span>
@@ -616,9 +622,13 @@ function App() {
               task={task}
               selectedTaskId={selectedTaskId}
               copiedTaskId={copiedTaskId}
-              onSelect={setSelectedTaskId}
               onToggleStatus={handleToggleTaskStatus}
-              onEdit={setEditingTask}
+                        onToggleChecklist={toggleChecklist}
+              onEdit={(taskToEdit) => {
+                setSelectedTaskId(null)
+                setIsCreatingTask(false)
+                setEditingTask({ ...taskToEdit })
+              }}
               onCopyPrompt={copyPrompt}
             />
           ))}
@@ -753,7 +763,7 @@ function App() {
           </div>
           <button className={activeView === 'Minhas tarefas' && quickFilter === 'Todos' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Todos')}><ListTodo size={17} /> Todas as tarefas <span className="nav-count">{tasks.length}</span></button>
           <button className={activeView === 'Minhas tarefas' && quickFilter === 'Hoje' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Hoje')}><CalendarDays size={17} /> Para hoje</button>
-          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Urgentes' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Urgentes')}><Bell size={17} /> Prioritárias <span className="nav-count">{tasks.filter((task) => task.scoreGut >= 80 || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</span></button>
+          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Urgentes' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Urgentes')}><Bell size={17} /> Prioritárias <span className="nav-count">{tasks.filter((task) => task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</span></button>
           <button className={activeView === 'Minhas tarefas' && quickFilter === 'Concluídas' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Concluídas')}><CheckCircle2 size={17} /> Concluídas</button>
         </nav>
 
@@ -778,6 +788,17 @@ function App() {
       </aside>
 
       <main className="main-content">
+        {(syncError || isLoadingTasks || isLoadingActivities) && (
+          <div className={`sync-banner ${syncError ? 'alert' : 'subtle'}`} role={syncError ? 'alert' : 'status'} aria-live="polite">
+            <span>
+              {syncError ?? (isLoadingTasks || isLoadingActivities ? 'Sincronizando tarefas e atividades...' : 'Dados atualizados.')}
+            </span>
+            {syncError && (
+              <button type="button" onClick={() => void syncFromServer()}>Tentar novamente</button>
+            )}
+          </div>
+        )}
+
         <header className="topbar">
           <div className="breadcrumb">
             <button className="top-home" onClick={() => handleNavClick('Visão geral')} aria-label="Ir para visão geral"><LayoutDashboard size={17} /></button>
@@ -836,7 +857,7 @@ function App() {
                       <span className={`notification-dot ${getDueState(task.due, task.status)}`} />
                       <span>
                         <strong>{task.title}</strong>
-                        <small>{getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' ? dueStateLabels[getDueState(task.due, task.status)] : `GUT ${task.scoreGut}`}</small>
+                        <small>{getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' ? dueStateLabels[getDueState(task.due, task.status)] : `Prioridade ${task.scoreGut}`}</small>
                       </span>
                     </button>
                   )) : (
@@ -890,21 +911,14 @@ function App() {
       {selectedTask && (
         <TaskDetailDrawer
           task={selectedTask}
+          phases={phases}
           copiedTaskId={copiedTaskId}
-          statusOrder={statusOrder}
-          dueToInputValue={dueToInputValue}
-          inputValueToDue={inputValueToDue}
           onClose={() => setSelectedTaskId(null)}
           onDeleteTask={handleDeleteSelectedTask}
           onCopyPrompt={(task) => void copyPrompt(task)}
-          onEditTask={() => {
-            setIsCreatingTask(false)
-            setEditingTask({ ...selectedTask })
-          }}
           onConfirmChanges={(task) => {
             saveTaskChanges(task)
             showToast('Alterações confirmadas')
-            setSelectedTaskId(null)
           }}
         />
       )}
@@ -914,15 +928,12 @@ function App() {
           editingTask={editingTask}
           isCreatingTask={isCreatingTask}
           phases={phases}
-          statusOrder={statusOrder}
           onClose={() => {
             setEditingTask(null)
             setIsCreatingTask(false)
           }}
           onFieldChange={(field, value) => setEditingTask({ ...editingTask, [field]: value })}
           onSave={handleSaveEditedTask}
-          dueToInputValue={dueToInputValue}
-          inputValueToDue={inputValueToDue}
         />
       )}
     </div>

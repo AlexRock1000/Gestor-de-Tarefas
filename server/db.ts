@@ -1,0 +1,52 @@
+import 'dotenv/config'
+import mysql from 'mysql2/promise'
+import type { RowDataPacket } from 'mysql2'
+import { readFile } from 'node:fs/promises'
+import { fileURLToPath } from 'node:url'
+
+const requiredEnv = ['MYSQL_HOST', 'MYSQL_USER', 'MYSQL_PASSWORD', 'MYSQL_DATABASE'] as const
+const missingEnv = requiredEnv.filter((name) => process.env[name] === undefined)
+
+if (missingEnv.length) {
+  throw new Error(`Configuração MySQL ausente: ${missingEnv.join(', ')}. Copie .env.example para .env e preencha os dados locais.`)
+}
+
+export const pool = mysql.createPool({
+  host: process.env.MYSQL_HOST,
+  port: Number(process.env.MYSQL_PORT ?? 3306),
+  user: process.env.MYSQL_USER,
+  password: process.env.MYSQL_PASSWORD,
+  database: process.env.MYSQL_DATABASE,
+  waitForConnections: true,
+  connectionLimit: 10,
+  queueLimit: 0,
+  charset: 'utf8mb4',
+})
+
+export let usesLegacyTaskPriorityColumns = false
+export let persistedCompletedStatus = 'Concluído'
+
+export const initializeDatabase = async () => {
+  const schemaUrl = new URL('./schema.sql', import.meta.url)
+  const schema = await readFile(fileURLToPath(schemaUrl), 'utf8')
+  const statements = schema.split(';').map((statement) => statement.trim()).filter(Boolean)
+  for (const statement of statements) {
+    await pool.query(statement)
+  }
+
+  const [columnRows] = await pool.query<RowDataPacket[]>(
+    'SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'tasks\'',
+  )
+  const columns = new Set(columnRows.map((row) => String(row.COLUMN_NAME)))
+  usesLegacyTaskPriorityColumns = columns.has('gravidade') && !columns.has('importancia')
+  const statusColumn = columnRows.find((row) => String(row.COLUMN_NAME) === 'status')
+  const statusColumnType = String(statusColumn?.COLUMN_TYPE ?? '')
+  const enumValues = [...statusColumnType.matchAll(/'((?:[^']|'')*)'/g)]
+    .map((match) => match[1].replaceAll("''", "'"))
+  const normalizeStatus = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/gi, '').toLowerCase()
+  persistedCompletedStatus = enumValues.find((value) => {
+    const normalized = normalizeStatus(value)
+    return normalized === normalizeStatus('Concluído') || normalized === 'concludo'
+  }) ?? 'Concluído'
+  await pool.query('SELECT 1')
+}
