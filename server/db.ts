@@ -24,6 +24,7 @@ export const pool = mysql.createPool({
 })
 
 export let usesLegacyTaskPriorityColumns = false
+export let persistedCompletedStatus = 'Concluído'
 
 export const initializeDatabase = async () => {
   const schemaUrl = new URL('./schema.sql', import.meta.url)
@@ -34,9 +35,18 @@ export const initializeDatabase = async () => {
   }
 
   const [columnRows] = await pool.query<RowDataPacket[]>(
-    'SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'tasks\'',
+    'SELECT COLUMN_NAME, COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'tasks\'',
   )
   const columns = new Set(columnRows.map((row) => String(row.COLUMN_NAME)))
   usesLegacyTaskPriorityColumns = columns.has('gravidade') && !columns.has('importancia')
+  const statusColumn = columnRows.find((row) => String(row.COLUMN_NAME) === 'status')
+  const statusColumnType = String(statusColumn?.COLUMN_TYPE ?? '')
+  const enumValues = [...statusColumnType.matchAll(/'((?:[^']|'')*)'/g)]
+    .map((match) => match[1].replaceAll("''", "'"))
+  const normalizeStatus = (value: string) => value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/gi, '').toLowerCase()
+  persistedCompletedStatus = enumValues.find((value) => {
+    const normalized = normalizeStatus(value)
+    return normalized === normalizeStatus('Concluído') || normalized === 'concludo'
+  }) ?? 'Concluído'
   await pool.query('SELECT 1')
 }

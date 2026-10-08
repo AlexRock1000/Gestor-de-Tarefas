@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { ResultSetHeader, RowDataPacket } from 'mysql2'
-import { pool, usesLegacyTaskPriorityColumns } from './db'
+import { persistedCompletedStatus, pool, usesLegacyTaskPriorityColumns } from './db'
 
 export type TaskStatus = 'Pendente' | 'Em Andamento' | 'Concluído'
 export type TaskPhase = 'Estoque' | 'Documentação' | 'Processos' | 'Automações'
@@ -41,12 +41,18 @@ const taskColumns = () => [
   '`urgencia`', '`scoreGut`', '`tag`', '`checklist`', '`promptIa`', '`observacoes`',
 ].join(', ')
 const placeholders = () => Array(taskColumns().split(', ').length).fill('?').join(', ')
+const normalizeStatus = (status: string) => status.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z]/gi, '').toLowerCase()
+const isCompletedStatus = (status: string) => ['concluido', 'concludo'].includes(normalizeStatus(status))
+const toDatabaseStatus = (status: TaskStatus) =>
+  isCompletedStatus(status) ? persistedCompletedStatus : status
+const fromDatabaseStatus = (status: string): TaskStatus =>
+  isCompletedStatus(status) ? 'Concluído' : status as TaskStatus
 
 const mapTask = (row: TaskRow): Task => ({
   id: Number(row.id),
   title: row.title,
   phase: row.phase,
-  status: row.status,
+  status: fromDatabaseStatus(row.status),
   due: row.due,
   createdAt: row.createdAt,
   responsible: row.responsible,
@@ -62,7 +68,7 @@ const mapTask = (row: TaskRow): Task => ({
 const writeValues = (task: TaskWrite) => [
   task.title,
   task.phase,
-  task.status,
+  toDatabaseStatus(task.status),
   task.due,
   task.createdAt,
   task.responsible,
