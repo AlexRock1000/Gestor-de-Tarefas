@@ -6,7 +6,7 @@ O cartão registra o identificador da tarefa no início do arraste, e a coluna d
 
 ## Edição offline e sincronização
 
-As operações de criação, atualização, exclusão e registro de atividade que falham por indisponibilidade da API são mantidas numa fila no `localStorage`. A fila é executada em ordem antes de baixar o estado do servidor; se uma operação ainda falhar, a sincronização não substitui os dados locais. Quando uma criação offline recebe o ID definitivo do servidor, as operações pendentes e a tarefa local são atualizadas para esse ID.
+As operações de criação, atualização, exclusão, importação CSV e registro de atividade que falham por indisponibilidade da API são mantidas numa fila no `localStorage`. A fila é executada em ordem antes de baixar o estado do servidor; se uma operação ainda falhar, a sincronização não substitui os dados locais. Quando uma criação offline recebe o ID definitivo do servidor, as operações pendentes e a tarefa local são atualizadas para esse ID.
 
 O armazenamento local também preserva arrays vazios. Assim, apagar todas as tarefas não restaura silenciosamente os exemplos de demonstração.
 

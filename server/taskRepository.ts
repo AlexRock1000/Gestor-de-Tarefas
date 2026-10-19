@@ -85,11 +85,11 @@ export const seedTasksIfEmpty = async () => {
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
-    const [settings] = await connection.query<RowDataPacket[]>(
-      'SELECT settingKey FROM app_settings WHERE settingKey = ? FOR UPDATE',
-      ['initial_tasks_seeded'],
+    const [seedClaim] = await connection.execute<ResultSetHeader>(
+      'INSERT IGNORE INTO app_settings (settingKey, settingValue) VALUES (?, ?)',
+      ['initial_tasks_seeded', 'in-progress'],
     )
-    if (settings.length) {
+    if (!seedClaim.affectedRows) {
       await connection.commit()
       return
     }
@@ -97,8 +97,8 @@ export const seedTasksIfEmpty = async () => {
     const [countRows] = await connection.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM tasks')
     const shouldSeed = Number(countRows[0]?.total ?? 0) === 0
     await connection.execute(
-      'INSERT INTO app_settings (settingKey, settingValue) VALUES (?, ?)',
-      ['initial_tasks_seeded', shouldSeed ? 'seeded' : 'existing-data'],
+      'UPDATE app_settings SET settingValue = ? WHERE settingKey = ?',
+      [shouldSeed ? 'seeded' : 'existing-data', 'initial_tasks_seeded'],
     )
 
     if (!shouldSeed) {

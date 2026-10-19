@@ -846,6 +846,10 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
     const savedTasks = await apiRequest<Task[]>('/tasks/bulk', {
       method: 'POST',
       body: JSON.stringify({ tasks: importedTasks }),
+    }).catch((error: unknown) => {
+      setSyncError(describeRequestError(error))
+      for (const task of importedTasks) enqueueOperation({ kind: 'create-task', task })
+      return importedTasks
     })
     setTasks((current) => [...current, ...savedTasks])
     setSyncError(null)
