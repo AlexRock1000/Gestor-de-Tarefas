@@ -32,3 +32,9 @@ CREATE TABLE IF NOT EXISTS activities (
   PRIMARY KEY (id),
   INDEX idx_activities_createdAt (createdAt)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  settingKey VARCHAR(100) NOT NULL,
+  settingValue VARCHAR(255) NOT NULL,
+  PRIMARY KEY (settingKey)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

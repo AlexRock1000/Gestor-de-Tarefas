@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -58,6 +58,12 @@ const exportActivitiesCsv = (activities: { actor: string; message: string; taskT
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'anonymous'>('checking')
+  const [authenticationEnabled, setAuthenticationEnabled] = useState(false)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [activityMenuOpen, setActivityMenuOpen] = useState(false)
@@ -136,7 +142,33 @@ function App() {
     isLoadingActivities,
     syncError,
     syncFromServer,
-  } = useTaskBoard()
+  } = useTaskBoard(profileName, authStatus === 'authenticated')
+
+  useEffect(() => {
+    let active = true
+    fetch('/api/auth/session', { credentials: 'include' })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Não foi possível validar a sessão.')
+        return response.json() as Promise<{ authenticated: boolean; authenticationEnabled: boolean; username: string | null }>
+      })
+      .then((session) => {
+        if (!active) return
+        setAuthenticationEnabled(session.authenticationEnabled)
+        setAuthStatus(session.authenticated ? 'authenticated' : 'anonymous')
+        if (session.username) setProfileName(session.username)
+      })
+      .catch(() => {
+        // A interface continua disponível com o cache local quando a API está offline.
+        if (active) setAuthStatus('authenticated')
+      })
+    return () => { active = false }
+  }, [])
+
+  useEffect(() => {
+    const handleSessionExpired = () => setAuthStatus('anonymous')
+    window.addEventListener('gestor:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('gestor:session-expired', handleSessionExpired)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -201,6 +233,35 @@ function App() {
   }, [activeView])
 
   const showToast = (message: string) => setToast(message)
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError(null)
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+      })
+      const result = await response.json() as { message?: string; username?: string }
+      if (!response.ok) throw new Error(result.message ?? 'Não foi possível entrar.')
+      if (result.username) setProfileName(result.username)
+      setLoginPassword('')
+      setAuthStatus('authenticated')
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Falha ao autenticar.')
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
+    } finally {
+      setAuthStatus('anonymous')
+    }
+  }
   const selectTaskFilter = (filter: 'Todos' | 'Hoje' | 'Urgentes' | 'Concluídas') => {
     clearFilters()
     setQuickFilter(filter)
@@ -424,6 +485,12 @@ function App() {
       status: 'Em andamento',
       href: '/docs/checklist-de-implementacao.md',
     },
+    {
+      title: 'Correções de estabilidade e segurança',
+      description: 'Detalhes da sincronização offline, histórico, seed de dados e autenticação da API.',
+      status: 'Atualizado em 19/10/2026',
+      href: '/docs/alteracoes-prioridades-2026-10-19.md',
+    },
   ]
 
   const renderDocumentsView = () => (
@@ -472,8 +539,13 @@ function App() {
             key={column.status}
             onDragOver={(event) => {
               event.preventDefault()
+              setDragOverStatus(column.status)
             }}
-            onDrop={() => handleKanbanDrop(column.status)}
+            onDragLeave={() => setDragOverStatus((current) => current === column.status ? null : current)}
+            onDrop={(event) => {
+              event.preventDefault()
+              handleKanbanDrop(column.status)
+            }}
           >
             <div className="kanban-column-header">
               <span>{column.status}</span>
@@ -488,8 +560,16 @@ function App() {
                   className="kanban-card"
                   key={task.id}
                   draggable
-                  onDragStart={() => setSelectedTaskId(task.id)}
-                  onDragEnd={() => setSelectedTaskId(task.id)}
+                  onDragStart={(event) => {
+                    setDraggedTaskId(task.id)
+                    setSelectedTaskId(task.id)
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', String(task.id))
+                  }}
+                  onDragEnd={() => {
+                    setDraggedTaskId(null)
+                    setDragOverStatus(null)
+                  }}
                   onClick={() => setSelectedTaskId(task.id)}
                 >
                   <div className="kanban-card-top">
@@ -705,6 +785,36 @@ function App() {
     </div>
   )
 
+  if (authStatus !== 'authenticated') {
+    return (
+      <main className="auth-screen">
+        <form className="auth-card" onSubmit={(event) => void handleLogin(event)}>
+          <span className="brand-mark"><Sparkles size={17} /></span>
+          <p className="eyebrow">GESTOR DE TAREFAS</p>
+          <h1>{authStatus === 'checking' ? 'Validando acesso' : 'Acesse seu espaço'}</h1>
+          {authStatus === 'checking' ? (
+            <p role="status">Verificando sua sessão segura…</p>
+          ) : (
+            <>
+              <label>
+                Usuário
+                <input autoComplete="username" value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} required />
+              </label>
+              <label>
+                Senha
+                <input type="password" autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} required />
+              </label>
+              {loginError && <p className="auth-error" role="alert">{loginError}</p>}
+              <button className="primary-button" type="submit" disabled={isLoggingIn}>
+                {isLoggingIn ? 'Entrando…' : 'Entrar'}
+              </button>
+            </>
+          )}
+        </form>
+      </main>
+    )
+  }
+
   return (
     <div className={`app-shell ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
       <aside className="sidebar">
@@ -783,6 +893,7 @@ function App() {
               <strong>{profileName}</strong>
               <span>Administrador</span>
             </div>
+              {authenticationEnabled && <button className="logout-button" type="button" onClick={() => void handleLogout()} aria-label="Encerrar sessão">Sair</button>}
           </div>
         </div>
       </aside>

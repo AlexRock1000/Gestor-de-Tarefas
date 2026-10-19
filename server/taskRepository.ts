@@ -82,16 +82,32 @@ const writeValues = (task: TaskWrite) => [
 ]
 
 export const seedTasksIfEmpty = async () => {
-  const [countRows] = await pool.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM tasks')
-  if (Number(countRows[0]?.total ?? 0) > 0) return
-
-  const rawTasks = await fs.readFile(seedFilePath, 'utf8')
-  const seedTasks = JSON.parse(rawTasks) as Task[]
-  if (!seedTasks.length) return
-
   const connection = await pool.getConnection()
   try {
     await connection.beginTransaction()
+    const [settings] = await connection.query<RowDataPacket[]>(
+      'SELECT settingKey FROM app_settings WHERE settingKey = ? FOR UPDATE',
+      ['initial_tasks_seeded'],
+    )
+    if (settings.length) {
+      await connection.commit()
+      return
+    }
+
+    const [countRows] = await connection.query<RowDataPacket[]>('SELECT COUNT(*) AS total FROM tasks')
+    const shouldSeed = Number(countRows[0]?.total ?? 0) === 0
+    await connection.execute(
+      'INSERT INTO app_settings (settingKey, settingValue) VALUES (?, ?)',
+      ['initial_tasks_seeded', shouldSeed ? 'seeded' : 'existing-data'],
+    )
+
+    if (!shouldSeed) {
+      await connection.commit()
+      return
+    }
+
+    const rawTasks = await fs.readFile(seedFilePath, 'utf8')
+    const seedTasks = JSON.parse(rawTasks) as Task[]
     for (const task of seedTasks) {
       const taskWrite: TaskWrite = {
         title: task.title,

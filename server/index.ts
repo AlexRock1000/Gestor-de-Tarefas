@@ -1,6 +1,16 @@
+import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
 import { createActivity, listActivities, type ActivityTone } from './activityRepository'
+import {
+  clearSessionCookie,
+  createSessionToken,
+  getSessionUsername,
+  isAuthenticationEnabled,
+  requireSession,
+  setSessionCookie,
+  verifyCredentials,
+} from './auth'
 import { initializeDatabase, pool } from './db'
 import {
   createTasks,
@@ -18,8 +28,49 @@ import {
 const app = express()
 const port = Number(process.env.PORT ?? 3001)
 
-app.use(cors())
+const allowedOrigin = process.env.APP_ORIGIN ?? 'http://localhost:5173'
+app.use(cors({ origin: allowedOrigin, credentials: true }))
 app.use(express.json())
+
+app.get('/api/auth/session', (req, res) => {
+  const username = getSessionUsername(req)
+  res.json({
+    authenticated: Boolean(username),
+    authenticationEnabled: isAuthenticationEnabled,
+    username: username === 'local' ? null : username,
+  })
+})
+
+const failedLoginAttempts = new Map<string, { count: number; resetAt: number }>()
+app.post('/api/auth/login', (req, res) => {
+  const clientKey = req.ip ?? 'unknown'
+  const now = Date.now()
+  const attempts = failedLoginAttempts.get(clientKey)
+  if (attempts && attempts.resetAt > now && attempts.count >= 10) {
+    res.status(429).json({ message: 'Muitas tentativas. Aguarde 15 minutos e tente novamente.' })
+    return
+  }
+
+  const username = String(req.body?.username ?? '')
+  const password = String(req.body?.password ?? '')
+  if (!verifyCredentials(username, password)) {
+    const current = attempts && attempts.resetAt > now ? attempts : { count: 0, resetAt: now + 15 * 60_000 }
+    failedLoginAttempts.set(clientKey, { ...current, count: current.count + 1 })
+    res.status(401).json({ message: 'Usuário ou senha inválidos.' })
+    return
+  }
+
+  failedLoginAttempts.delete(clientKey)
+  setSessionCookie(res, createSessionToken(username))
+  res.json({ authenticated: true, authenticationEnabled: true, username })
+})
+
+app.post('/api/auth/logout', (_req, res) => {
+  clearSessionCookie(res)
+  res.status(204).send()
+})
+
+app.use('/api', requireSession)
 
 app.get('/api/health', async (_req, res) => {
   await pool.query('SELECT 1')
@@ -48,7 +99,6 @@ app.post('/api/activities', async (req, res) => {
     tone,
     message,
     taskTitle: String(req.body?.taskTitle ?? ''),
-    time: String(req.body?.time ?? 'Agora'),
   })
   res.status(201).json(activity)
 })

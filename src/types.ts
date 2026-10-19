@@ -30,6 +30,7 @@ export type Activity = {
   message: string
   taskTitle: string
   time: string
+  createdAt?: string
 }
 
 export type DeadlineFilter = 'Todos' | 'Em aberto' | 'Concluídas'

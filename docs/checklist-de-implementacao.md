@@ -13,4 +13,10 @@
 
 - [x] Persistir tarefas e atividades pela API.
 - [x] Exibir estados de carregamento e erro durante operações remotas.
+- [x] Enfileirar gravações offline e reaplicá-las antes de sincronizar dados do servidor.
+- [x] Preservar uma lista vazia sem restaurar tarefas de demonstração após exclusão total.
+- [x] Disponibilizar o histórico integral com horários derivados do timestamp do banco.
+- [x] Exigir sessão autenticada na API em produção e restringir a origem CORS.
 - [ ] Sincronizar perfil e workspace entre usuários e dispositivos.
+
+Ver detalhes das alterações e dos limites conhecidos em [alteracoes-prioridades-2026-10-19.md](alteracoes-prioridades-2026-10-19.md).

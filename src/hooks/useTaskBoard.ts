@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
   computeScore,
   CRITICAL_PRIORITY_THRESHOLD,
@@ -184,10 +184,34 @@ export const initialTasks: Task[] = [
 
 const storageKey = 'gestor-de-tarefas-v1'
 const activityStorageKey = `${storageKey}-activity`
+const pendingOperationsKey = `${storageKey}-pending-operations`
 const API_BASE_URL = '/api'
+
+type PendingOperation =
+  | { kind: 'create-task'; task: Task }
+  | { kind: 'update-task'; task: Task }
+  | { kind: 'delete-task'; taskId: number }
+  | { kind: 'create-activity'; activity: Omit<Activity, 'id'>; localId: number }
+
+const readPendingOperations = (): PendingOperation[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const value = JSON.parse(window.localStorage.getItem(pendingOperationsKey) ?? '[]') as unknown
+    return Array.isArray(value) ? value as PendingOperation[] : []
+  } catch {
+    return []
+  }
+}
+
+const writePendingOperations = (operations: PendingOperation[]) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(pendingOperationsKey, JSON.stringify(operations))
+  }
+}
 
 const apiRequest = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
   const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(options?.headers ?? {}),
@@ -196,6 +220,9 @@ const apiRequest = async <T>(endpoint: string, options?: RequestInit): Promise<T
   })
 
   if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('gestor:session-expired'))
+    }
     throw new Error(`Request failed: ${response.status}`)
   }
 
@@ -229,7 +256,7 @@ const initialActivities: Activity[] = [
   { id: 3, actor: 'Lucas', tone: 'coral', message: 'adicionou um item ao checklist', taskTitle: '', time: 'Há 2 h' },
 ]
 
-export function useTaskBoard() {
+export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (typeof window === 'undefined') {
       return initialTasks
@@ -243,9 +270,7 @@ export function useTaskBoard() {
 
     try {
       const parsed = JSON.parse(stored) as unknown[]
-      return Array.isArray(parsed) && parsed.length
-        ? parsed.map(normalizeTask)
-        : initialTasks
+      return Array.isArray(parsed) ? parsed.map(normalizeTask) : initialTasks
     } catch {
       return initialTasks
     }
@@ -274,11 +299,108 @@ export function useTaskBoard() {
     if (!stored) return initialActivities
     try {
       const parsed = JSON.parse(stored) as Activity[]
-      return Array.isArray(parsed) && parsed.length ? parsed : initialActivities
+      return Array.isArray(parsed) ? parsed : initialActivities
     } catch {
       return initialActivities
     }
   })
+  const isFlushingOperations = useRef(false)
+
+  const enqueueOperation = (operation: PendingOperation) => {
+    const pending = readPendingOperations()
+    if (operation.kind === 'delete-task') {
+      const wasCreatedOffline = pending.some(
+        (item) => item.kind === 'create-task' && item.task.id === operation.taskId,
+      )
+      if (wasCreatedOffline && isFlushingOperations.current) {
+        writePendingOperations([...pending, operation])
+        return
+      }
+      const remaining = pending.filter((item) => {
+        if (item.kind === 'create-task' || item.kind === 'update-task') {
+          return item.task.id !== operation.taskId
+        }
+        return item.kind !== 'delete-task' || item.taskId !== operation.taskId
+      })
+      writePendingOperations(wasCreatedOffline ? remaining : [...remaining, operation])
+      return
+    }
+    writePendingOperations([...pending, operation])
+  }
+
+  const flushPendingOperations = async () => {
+    if (isFlushingOperations.current) return
+    isFlushingOperations.current = true
+    let pending = readPendingOperations()
+    try {
+      while (pending.length) {
+        const operation = pending[0]
+        let remappedTaskId: { from: number; to: number } | null = null
+        if (operation.kind === 'create-task') {
+        const savedTask = await apiRequest<Task>('/tasks', {
+          method: 'POST',
+          body: JSON.stringify(operation.task),
+        })
+        const oldId = operation.task.id
+        remappedTaskId = { from: oldId, to: savedTask.id }
+        setTasks((current) => current.map((task) => task.id === oldId ? savedTask : task))
+        setSelectedTaskId((current) => current === oldId ? savedTask.id : current)
+        if (typeof window !== 'undefined') {
+          const localTasks = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as Task[]
+          window.localStorage.setItem(storageKey, JSON.stringify(localTasks.map((task) => task.id === oldId ? savedTask : task)))
+        }
+        } else if (operation.kind === 'update-task') {
+        try {
+          await apiRequest<Task>(`/tasks/${operation.task.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(operation.task),
+          })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'Request failed: 404') throw error
+          const recreatedTask = await apiRequest<Task>('/tasks', {
+            method: 'POST',
+            body: JSON.stringify(operation.task),
+          })
+          const oldId = operation.task.id
+          remappedTaskId = { from: oldId, to: recreatedTask.id }
+          setTasks((current) => current.map((task) => task.id === oldId ? recreatedTask : task))
+          setSelectedTaskId((current) => current === oldId ? recreatedTask.id : current)
+        }
+        } else if (operation.kind === 'delete-task') {
+        try {
+          await apiRequest(`/tasks/${operation.taskId}`, { method: 'DELETE' })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'Request failed: 404') throw error
+        }
+        } else {
+        const savedActivity = await apiRequest<Activity>('/activities', {
+          method: 'POST',
+          body: JSON.stringify(operation.activity),
+        })
+        setActivities((current) => current.map((activity) =>
+          activity.id === operation.localId ? savedActivity : activity,
+        ))
+        }
+
+        const latestPending = readPendingOperations()
+        if (JSON.stringify(latestPending[0]) === JSON.stringify(operation)) latestPending.shift()
+        pending = remappedTaskId
+          ? latestPending.map((item) => {
+              if (item.kind === 'update-task' && item.task.id === remappedTaskId?.from) {
+                return { ...item, task: { ...item.task, id: remappedTaskId.to } }
+              }
+              if (item.kind === 'delete-task' && item.taskId === remappedTaskId?.from) {
+                return { ...item, taskId: remappedTaskId.to }
+              }
+              return item
+            })
+          : latestPending
+        writePendingOperations(pending)
+      }
+    } finally {
+      isFlushingOperations.current = false
+    }
+  }
 
   const syncFromServer = async () => {
     setSyncError(null)
@@ -286,13 +408,29 @@ export function useTaskBoard() {
     setIsLoadingActivities(true)
 
     try {
+      await flushPendingOperations()
       const [savedTasks, savedActivities] = await Promise.all([
         apiRequest<Task[]>('/tasks'),
         apiRequest<Activity[]>('/activities'),
       ])
+      const pending = readPendingOperations()
+      const mergedTasks = savedTasks.map(normalizeTask)
+      const mergedActivities = [...savedActivities]
+      for (const operation of pending) {
+        if (operation.kind === 'create-task' || operation.kind === 'update-task') {
+          const index = mergedTasks.findIndex((task) => task.id === operation.task.id)
+          if (index < 0) mergedTasks.push(operation.task)
+          else mergedTasks[index] = operation.task
+        } else if (operation.kind === 'delete-task') {
+          const index = mergedTasks.findIndex((task) => task.id === operation.taskId)
+          if (index >= 0) mergedTasks.splice(index, 1)
+        } else if (!mergedActivities.some((activity) => activity.id === operation.localId)) {
+          mergedActivities.unshift({ ...operation.activity, id: operation.localId })
+        }
+      }
 
-      setTasks(savedTasks.map(normalizeTask))
-      setActivities(savedActivities)
+      setTasks(mergedTasks)
+      setActivities(mergedActivities)
     } catch (error) {
       setSyncError(describeRequestError(error))
     } finally {
@@ -302,8 +440,8 @@ export function useTaskBoard() {
   }
 
   useEffect(() => {
-    void syncFromServer()
-  }, [])
+    if (syncEnabled) void syncFromServer()
+  }, [syncEnabled])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -394,6 +532,7 @@ export function useTaskBoard() {
       })
     } catch (error) {
       setSyncError(describeRequestError(error))
+      enqueueOperation({ kind: 'update-task', task: nextTask })
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((task) => (task.id === taskId ? nextTask : task))))
       }
@@ -406,10 +545,12 @@ export function useTaskBoard() {
         method: 'POST',
         body: JSON.stringify(activity),
       })
-      setActivities((current) => [savedActivity, ...current].slice(0, 12))
+      setActivities((current) => [savedActivity, ...current])
     } catch (error) {
       setSyncError(describeRequestError(error))
-      setActivities((current) => [{ ...activity, id: Date.now() }, ...current].slice(0, 12))
+      const localId = Date.now()
+      setActivities((current) => [{ ...activity, id: localId }, ...current])
+      enqueueOperation({ kind: 'create-activity', activity, localId })
     }
   }
 
@@ -430,6 +571,7 @@ export function useTaskBoard() {
       })
     } catch (error) {
       setSyncError(describeRequestError(error))
+      enqueueOperation({ kind: 'update-task', task: nextTask })
       if (typeof window !== 'undefined') {
         window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((item) => (item.id === id ? nextTask : item))))
       }
@@ -437,7 +579,7 @@ export function useTaskBoard() {
 
     if (task.status !== status) {
       void recordActivity({
-        actor: 'Daniel',
+        actor: actorName,
         tone: status === 'Concluído' ? 'teal' : 'amber',
         message: 'moveu para',
         taskTitle: task.title,
@@ -470,7 +612,7 @@ export function useTaskBoard() {
 
     void updateTask(taskId, { checklist, status, due })
     void recordActivity({
-      actor: 'Daniel',
+      actor: actorName,
       tone: completesTask ? 'teal' : 'coral',
       message: completesTask ? 'concluiu ao finalizar o checklist de' : reopensTask ? 'reabriu ao desmarcar o checklist de' : 'atualizou o checklist de',
       taskTitle: task.title,
@@ -517,13 +659,14 @@ export function useTaskBoard() {
       await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' })
     } catch (error) {
       setSyncError(describeRequestError(error))
+      enqueueOperation({ kind: 'delete-task', taskId })
       if (typeof window !== 'undefined') {
         const nextTasks = tasks.filter((taskItem) => taskItem.id !== taskId)
         window.localStorage.setItem(storageKey, JSON.stringify(nextTasks))
       }
     }
 
-    if (task) void recordActivity({ actor: 'Daniel', tone: 'coral', message: 'removeu', taskTitle: task.title, time: 'Agora' })
+    if (task) void recordActivity({ actor: actorName, tone: 'coral', message: 'removeu', taskTitle: task.title, time: 'Agora' })
   }
 
   const addChecklistItem = (taskId: number) => {
@@ -706,7 +849,7 @@ export function useTaskBoard() {
     })
     setTasks((current) => [...current, ...savedTasks])
     setSyncError(null)
-    void recordActivity({ actor: 'Daniel', tone: 'teal', message: 'importou', taskTitle: `${savedTasks.length} tarefas via CSV`, time: 'Agora' })
+    void recordActivity({ actor: actorName, tone: 'teal', message: 'importou', taskTitle: `${savedTasks.length} tarefas via CSV`, time: 'Agora' })
     return savedTasks.length
   }
 
@@ -760,8 +903,10 @@ export function useTaskBoard() {
     } catch (error) {
       setSyncError(describeRequestError(error))
       if (isCreatingTask) {
+        enqueueOperation({ kind: 'create-task', task: normalizedTask })
         setTasks((current) => [...current, normalizedTask])
       } else {
+        enqueueOperation({ kind: 'update-task', task: normalizedTask })
         setTasks((current) =>
           current.map((task) =>
             task.id === normalizedTask.id
@@ -776,7 +921,7 @@ export function useTaskBoard() {
     setEditingTask(null)
     setIsCreatingTask(false)
     void recordActivity({
-      actor: 'Daniel',
+      actor: actorName,
       tone: isCreatingTask ? 'teal' : 'amber',
       message: isCreatingTask ? 'criou' : 'editou',
       taskTitle: normalizedTask.title,
@@ -855,7 +1000,18 @@ export function useTaskBoard() {
   }
 
   const saveTaskChanges = async (task: Task) => {
+    const previous = tasks.find((item) => item.id === task.id)
+    const changed = previous && JSON.stringify(previous) !== JSON.stringify(task)
     await updateTask(task.id, task)
+    if (changed) {
+      void recordActivity({
+        actor: actorName,
+        tone: 'amber',
+        message: 'editou',
+        taskTitle: task.title,
+        time: 'Agora',
+      })
+    }
   }
 
   return {
