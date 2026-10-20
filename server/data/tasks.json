@@ -1,0 +1,42 @@
+[
+  {
+    "id": 1,
+    "title": "Mapear itens sem giro há 90 dias",
+    "phase": "Estoque",
+    "status": "Em Andamento",
+    "due": "Hoje",
+    "createdAt": "2026-09-12",
+    "responsible": "Daniel Rocha",
+    "importancia": 5,
+    "urgencia": 4,
+    "scoreGut": 20,
+    "tag": "Diagnóstico",
+    "checklist": [
+      { "label": "Exportar relatório do ERP", "done": true },
+      { "label": "Classificar itens por curva ABC", "done": true },
+      { "label": "Validar lista com compras", "done": false }
+    ],
+    "promptIa": "Analise os itens sem giro há 90 dias e proponha uma ação de redução de estoque com base em risco financeiro, espaço e demanda real.",
+    "observacoes": "Aular itens duplicados no ERP e confirmar data de última movimentação antes da decisão final."
+  },
+  {
+    "id": 2,
+    "title": "Definir política de inventário cíclico",
+    "phase": "Estoque",
+    "status": "Pendente",
+    "due": "18 set",
+    "createdAt": "2026-09-14",
+    "responsible": "Ana Maria",
+    "importancia": 4,
+    "urgencia": 3,
+    "scoreGut": 12,
+    "tag": "Política",
+    "checklist": [
+      { "label": "Levantar frequência atual", "done": false },
+      { "label": "Propor nova frequência", "done": false },
+      { "label": "Validar com área de compras", "done": false }
+    ],
+    "promptIa": "Crie uma política de inventário cíclico para reduzir faltas e excesso, com critério por categoria e frequência de revisão.",
+    "observacoes": "Precisa alinhar com a política fiscal e taxas de obsolescência da operação."
+  }
+]

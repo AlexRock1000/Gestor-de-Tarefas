@@ -1,4 +1,4 @@
-import { type ChangeEvent, useEffect, useRef, useState } from 'react'
+import { type ChangeEvent, type FormEvent, useEffect, useRef, useState } from 'react'
 import {
   ArrowUpRight,
   Bell,
@@ -21,17 +21,16 @@ import {
   Sparkles,
   SunMedium,
   Target,
+  Trash2,
   Upload,
 } from 'lucide-react'
-import { getDueState, getPriorityBand } from './taskUtils'
+import { CRITICAL_PRIORITY_THRESHOLD, getDueState, getPriorityBand } from './taskUtils'
 import type { DeadlineFilter, GutFilter } from './types'
 import { TaskCard } from './components/TaskCard'
 import { TaskDetailDrawer } from './components/TaskDetailDrawer'
 import { TaskEditorModal } from './components/TaskEditorModal'
 import {
   dueStateLabels,
-  dueToInputValue,
-  inputValueToDue,
   phases,
   statusOrder,
   useTaskBoard,
@@ -60,6 +59,13 @@ const exportActivitiesCsv = (activities: { actor: string; message: string; taskT
 
 function App() {
   const [theme, setTheme] = useState<'dark' | 'light'>('dark')
+  const [authStatus, setAuthStatus] = useState<'checking' | 'authenticated' | 'anonymous'>('checking')
+  const [authenticationEnabled, setAuthenticationEnabled] = useState(false)
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginPassword, setLoginPassword] = useState('')
+  const [loginError, setLoginError] = useState<string | null>(null)
+  const [sessionError, setSessionError] = useState<string | null>(null)
+  const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
   const [activityMenuOpen, setActivityMenuOpen] = useState(false)
@@ -124,16 +130,49 @@ function App() {
     clearFilters,
     saveTaskChanges,
     updateStatus,
+    toggleChecklist,
     handleKanbanDrop,
     addTask,
     deleteTask,
+    deleteAllTasks,
     copyPrompt,
     exportTasks,
     importTasks,
     saveEditedTask,
     tasks,
     getDueState,
-  } = useTaskBoard()
+    isLoadingTasks,
+    isLoadingActivities,
+    syncError,
+    syncFromServer,
+  } = useTaskBoard(profileName, authStatus === 'authenticated')
+
+  const validateSession = async () => {
+    setAuthStatus('checking')
+    setSessionError(null)
+    try {
+      const response = await fetch('/api/auth/session', { credentials: 'include' })
+      if (!response.ok) throw new Error('Não foi possível validar a sessão.')
+      const session = await response.json() as { authenticated: boolean; authenticationEnabled: boolean; username: string | null }
+      setAuthenticationEnabled(session.authenticationEnabled)
+      setAuthStatus(session.authenticated ? 'authenticated' : 'anonymous')
+      if (session.username) setProfileName(session.username)
+    } catch {
+      // A interface protegida nunca é liberada sem confirmação do servidor.
+      setAuthStatus('anonymous')
+      setSessionError('Não foi possível validar sua sessão. Verifique a conexão e tente novamente.')
+    }
+  }
+
+  useEffect(() => {
+    void validateSession()
+  }, [])
+
+  useEffect(() => {
+    const handleSessionExpired = () => setAuthStatus('anonymous')
+    window.addEventListener('gestor:session-expired', handleSessionExpired)
+    return () => window.removeEventListener('gestor:session-expired', handleSessionExpired)
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -198,6 +237,36 @@ function App() {
   }, [activeView])
 
   const showToast = (message: string) => setToast(message)
+  const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setIsLoggingIn(true)
+    setLoginError(null)
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: loginUsername, password: loginPassword }),
+      })
+      const result = await response.json() as { message?: string; username?: string }
+      if (!response.ok) throw new Error(result.message ?? 'Não foi possível entrar.')
+      if (result.username) setProfileName(result.username)
+      setLoginPassword('')
+      setAuthStatus('authenticated')
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : 'Falha ao autenticar.')
+    } finally {
+      setIsLoggingIn(false)
+    }
+  }
+  const handleLogout = async () => {
+    setAuthStatus('anonymous')
+    setSelectedTaskId(null)
+    setEditingTask(null)
+    setIsCreatingTask(false)
+    setProfileMenuOpen(false)
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
+  }
   const selectTaskFilter = (filter: 'Todos' | 'Hoje' | 'Urgentes' | 'Concluídas') => {
     clearFilters()
     setQuickFilter(filter)
@@ -231,6 +300,14 @@ function App() {
     setSelectedTaskId(null)
   }
 
+  const handleDeleteAllTasks = () => {
+    if (!tasks.length) return
+    const confirmed = window.confirm(`Excluir permanentemente todas as ${tasks.length} tarefas? O histórico de atividades será preservado.`)
+    if (!confirmed) return
+    deleteAllTasks()
+    showToast('Tarefas excluídas; histórico preservado')
+  }
+
   const handleImportTasks = async (event: ChangeEvent<HTMLInputElement>) => {
     try {
       const importedCount = await importTasks(event)
@@ -248,10 +325,9 @@ function App() {
       return
     }
 
-    const currentStatusIndex = statusOrder.indexOf(task.status)
-    const nextStatus = statusOrder[(currentStatusIndex + 1) % statusOrder.length]
+    const nextStatus = task.status === 'Concluído' ? 'Pendente' : 'Concluído'
     updateStatus(taskId, nextStatus)
-    showToast(`Status atualizado para ${nextStatus}`)
+    showToast(nextStatus === 'Concluído' ? 'Tarefa marcada como feita' : 'Tarefa reaberta')
   }
 
   const profileInitials = profileName.trim().split(/\s+/).slice(0, 2).map((part) => part[0]).join('').toUpperCase() || 'DR'
@@ -379,7 +455,13 @@ function App() {
           <h1>Histórico</h1>
           <p>Veja as últimas movimentações feitas no plano de ação.</p>
         </div>
-        <span className="history-count">{activities.length} eventos</span>
+        <div className="history-header-actions">
+          <span className="history-count">{activities.length} eventos</span>
+          <button className="text-button" type="button" onClick={() => {
+            exportActivitiesCsv(activities)
+            showToast('Histórico completo exportado em CSV')
+          }}><Download size={15} /> Exportar histórico</button>
+        </div>
       </div>
 
       {!activities.length ? (
@@ -387,17 +469,19 @@ function App() {
           <strong>Nenhuma atividade registrada</strong>
           <span>As ações realizadas nas tarefas aparecerão aqui.</span>
         </div>
-      ) : <div className="history-list">
-        {activities.map((activity) => (
-          <article className="history-item" key={activity.id}>
-            <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
-            <div className="history-item-copy">
-              <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
-              <span>{activity.time}</span>
-            </div>}
-          </article>
-        ))}
-      </div>
+      ) : (
+        <div className="history-list">
+          {activities.map((activity) => (
+            <article className="history-item" key={activity.id}>
+              <div className={`activity-avatar ${activity.tone}`}>{activity.actor.slice(0, 2).toUpperCase()}</div>
+              <div className="history-item-copy">
+                <p><strong>{activity.actor}</strong> {activity.message} {activity.taskTitle && <b>{activity.taskTitle}</b>}</p>
+                <span>{activity.time}</span>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
     </section>
   )
 
@@ -419,6 +503,12 @@ function App() {
       description: 'Pendências e próximos passos para evoluir o produto com mais estabilidade e UX.',
       status: 'Em andamento',
       href: '/docs/checklist-de-implementacao.md',
+    },
+    {
+      title: 'Correções de estabilidade e segurança',
+      description: 'Detalhes da sincronização offline, histórico, seed de dados e autenticação da API.',
+      status: 'Atualizado em 19/10/2026',
+      href: '/docs/alteracoes-prioridades-2026-10-19.md',
     },
   ]
 
@@ -468,8 +558,13 @@ function App() {
             key={column.status}
             onDragOver={(event) => {
               event.preventDefault()
+              setDragOverStatus(column.status)
             }}
-            onDrop={() => handleKanbanDrop(column.status)}
+            onDragLeave={() => setDragOverStatus((current) => current === column.status ? null : current)}
+            onDrop={(event) => {
+              event.preventDefault()
+              handleKanbanDrop(column.status)
+            }}
           >
             <div className="kanban-column-header">
               <span>{column.status}</span>
@@ -484,13 +579,21 @@ function App() {
                   className="kanban-card"
                   key={task.id}
                   draggable
-                  onDragStart={() => setSelectedTaskId(task.id)}
-                  onDragEnd={() => setSelectedTaskId(task.id)}
+                  onDragStart={(event) => {
+                    setDraggedTaskId(task.id)
+                    setSelectedTaskId(task.id)
+                    event.dataTransfer.effectAllowed = 'move'
+                    event.dataTransfer.setData('text/plain', String(task.id))
+                  }}
+                  onDragEnd={() => {
+                    setDraggedTaskId(null)
+                    setDragOverStatus(null)
+                  }}
                   onClick={() => setSelectedTaskId(task.id)}
                 >
                   <div className="kanban-card-top">
                     <span className={`tag ${task.phase.toLowerCase()}`}>{task.phase}</span>
-                    <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>GUT {task.scoreGut}</span>
+                    <span className={`priority-label ${getPriorityBand(task.scoreGut)}`}>Prioridade {task.scoreGut}</span>
                   </div>
 
                   <strong>{task.title}</strong>
@@ -518,7 +621,10 @@ function App() {
               <h2>Minhas tarefas</h2>
               <p>Escolha uma tarefa e avance no seu ritmo.</p>
             </div>
-            <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
+            <div className="tasks-header-actions">
+              <button className="bulk-delete-button" type="button" onClick={handleDeleteAllTasks} disabled={!tasks.length}><Trash2 size={15} /> Excluir todas</button>
+              <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
+            </div>
           </div>
 
           <div className="filter-group">
@@ -536,7 +642,7 @@ function App() {
                 >
                   <span>{item.label}</span>
                   {item.value === 'Hoje' && <strong>{tasks.filter((task) => getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
-                  {item.value === 'Urgentes' && <strong>{tasks.filter((task) => task.scoreGut >= 80 || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
+                  {item.value === 'Urgentes' && <strong>{tasks.filter((task) => task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</strong>}
                   {item.value === 'Concluídas' && <strong>{tasks.filter((task) => task.status === 'Concluído').length}</strong>}
                 </button>
               ))}
@@ -550,50 +656,52 @@ function App() {
               </button>
             </div>
 
-            {filtersExpanded && <div className="filters-expanded">
-              <div className="filter-tabs">
-                <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
-                {phases.map((phase) => (
-                  <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
-                ))}
-              </div>
-
-              <div className="status-tabs">
-                <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
-                {statusOrder.map((status) => (
-                  <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
-                ))}
-              </div>
-
-              <div className="advanced-filters">
-              <label>
-                Responsável
-                <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
-                  <option value="Todos">Todos</option>
-                  {responsibleOptions.map((responsible) => (
-                    <option key={responsible} value={responsible}>{responsible}</option>
+            {filtersExpanded && (
+              <div className="filters-expanded">
+                <div className="filter-tabs">
+                  <button className={activePhase === 'Todas' ? 'selected' : ''} onClick={() => setActivePhase('Todas')}>Todas as fases</button>
+                  {phases.map((phase) => (
+                    <button className={activePhase === phase.name ? 'selected' : ''} key={phase.name} onClick={() => setActivePhase(phase.name)}>{phase.name}</button>
                   ))}
-                </select>
-              </label>
-              <label>
-                Prazo
-                <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as any)}>
-                  <option value="Todos">Todos</option>
-                  <option value="Em aberto">Em aberto</option>
-                  <option value="Concluídas">Concluídas</option>
-                </select>
-              </label>
-              <label>
-                Prioridade
-                <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as any)}>
-                  <option value="Todos">Todas</option>
-                  <option value="Críticas (80+)">Críticas</option>
-                  <option value="Altas (50-79)">Altas</option>
-                  <option value="Baixas (até 49)">Baixas</option>
-                </select>
-              </label>
+                </div>
+
+                <div className="status-tabs">
+                  <button className={statusFilter === 'Todos' ? 'selected' : ''} onClick={() => setStatusFilter('Todos')}>Todos os status</button>
+                  {statusOrder.map((status) => (
+                    <button className={statusFilter === status ? 'selected' : ''} key={status} onClick={() => setStatusFilter(status)}>{status}</button>
+                  ))}
+                </div>
+
+                <div className="advanced-filters">
+                  <label>
+                    Responsável
+                    <select value={responsibleFilter} onChange={(event) => setResponsibleFilter(event.target.value)}>
+                      <option value="Todos">Todos</option>
+                      {responsibleOptions.map((responsible) => (
+                        <option key={responsible} value={responsible}>{responsible}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Prazo
+                    <select value={deadlineFilter} onChange={(event) => setDeadlineFilter(event.target.value as any)}>
+                      <option value="Todos">Todos</option>
+                      <option value="Em aberto">Em aberto</option>
+                      <option value="Concluídas">Concluídas</option>
+                    </select>
+                  </label>
+                  <label>
+                    Prioridade
+                    <select value={gutFilter} onChange={(event) => setGutFilter(event.target.value as any)}>
+                      <option value="Todos">Todas</option>
+                      <option value="Críticas (20+)">Críticas</option>
+                      <option value="Altas (12-19)">Altas</option>
+                      <option value="Baixas (até 11)">Baixas</option>
+                    </select>
+                  </label>
+                </div>
               </div>
-            </div>}
+            )}
 
             <div className="filter-summary">
               <span>{visibleTasks.length} de {tasks.length} tarefas</span>
@@ -616,9 +724,13 @@ function App() {
               task={task}
               selectedTaskId={selectedTaskId}
               copiedTaskId={copiedTaskId}
-              onSelect={setSelectedTaskId}
               onToggleStatus={handleToggleTaskStatus}
-              onEdit={setEditingTask}
+                        onToggleChecklist={toggleChecklist}
+              onEdit={(taskToEdit) => {
+                setSelectedTaskId(null)
+                setIsCreatingTask(false)
+                setEditingTask({ ...taskToEdit })
+              }}
               onCopyPrompt={copyPrompt}
             />
           ))}
@@ -695,6 +807,41 @@ function App() {
     </div>
   )
 
+  if (authStatus !== 'authenticated') {
+    return (
+      <main className="auth-screen">
+        <form className="auth-card" onSubmit={(event) => void handleLogin(event)}>
+          <span className="brand-mark"><Sparkles size={17} /></span>
+          <p className="eyebrow">GESTOR DE TAREFAS</p>
+          <h1>{authStatus === 'checking' ? 'Validando acesso' : 'Acesse seu espaço'}</h1>
+          {authStatus === 'checking' ? (
+            <p role="status">Verificando sua sessão segura…</p>
+          ) : sessionError ? (
+            <>
+              <p className="auth-error" role="alert">{sessionError}</p>
+              <button className="primary-button" type="button" onClick={() => void validateSession()}>Tentar novamente</button>
+            </>
+          ) : (
+            <>
+              <label>
+                Usuário
+                <input autoComplete="username" value={loginUsername} onChange={(event) => setLoginUsername(event.target.value)} required />
+              </label>
+              <label>
+                Senha
+                <input type="password" autoComplete="current-password" value={loginPassword} onChange={(event) => setLoginPassword(event.target.value)} required />
+              </label>
+              {loginError && <p className="auth-error" role="alert">{loginError}</p>}
+              <button className="primary-button" type="submit" disabled={isLoggingIn}>
+                {isLoggingIn ? 'Entrando…' : 'Entrar'}
+              </button>
+            </>
+          )}
+        </form>
+      </main>
+    )
+  }
+
   return (
     <div className={`app-shell ${theme === 'dark' ? 'dark-theme' : 'light-theme'}`}>
       <aside className="sidebar">
@@ -753,7 +900,7 @@ function App() {
           </div>
           <button className={activeView === 'Minhas tarefas' && quickFilter === 'Todos' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Todos')}><ListTodo size={17} /> Todas as tarefas <span className="nav-count">{tasks.length}</span></button>
           <button className={activeView === 'Minhas tarefas' && quickFilter === 'Hoje' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Hoje')}><CalendarDays size={17} /> Para hoje</button>
-          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Urgentes' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Urgentes')}><Bell size={17} /> Prioritárias <span className="nav-count">{tasks.filter((task) => task.scoreGut >= 80 || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</span></button>
+          <button className={activeView === 'Minhas tarefas' && quickFilter === 'Urgentes' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Urgentes')}><Bell size={17} /> Prioritárias <span className="nav-count">{tasks.filter((task) => task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD || getDueState(task.due, task.status) === 'today' || getDueState(task.due, task.status) === 'overdue').length}</span></button>
           <button className={activeView === 'Minhas tarefas' && quickFilter === 'Concluídas' ? 'nav-item active' : 'nav-item'} onClick={() => selectTaskFilter('Concluídas')}><CheckCircle2 size={17} /> Concluídas</button>
         </nav>
 
@@ -773,11 +920,23 @@ function App() {
               <strong>{profileName}</strong>
               <span>Administrador</span>
             </div>
+              {authenticationEnabled && <button className="logout-button" type="button" onClick={() => void handleLogout()} aria-label="Encerrar sessão">Sair</button>}
           </div>
         </div>
       </aside>
 
       <main className="main-content">
+        {(syncError || isLoadingTasks || isLoadingActivities) && (
+          <div className={`sync-banner ${syncError ? 'alert' : 'subtle'}`} role={syncError ? 'alert' : 'status'} aria-live="polite">
+            <span>
+              {syncError ?? (isLoadingTasks || isLoadingActivities ? 'Sincronizando tarefas e atividades...' : 'Dados atualizados.')}
+            </span>
+            {syncError && (
+              <button type="button" onClick={() => void syncFromServer()}>Tentar novamente</button>
+            )}
+          </div>
+        )}
+
         <header className="topbar">
           <div className="breadcrumb">
             <button className="top-home" onClick={() => handleNavClick('Visão geral')} aria-label="Ir para visão geral"><LayoutDashboard size={17} /></button>
@@ -836,7 +995,7 @@ function App() {
                       <span className={`notification-dot ${getDueState(task.due, task.status)}`} />
                       <span>
                         <strong>{task.title}</strong>
-                        <small>{getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' ? dueStateLabels[getDueState(task.due, task.status)] : `GUT ${task.scoreGut}`}</small>
+                        <small>{getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' ? dueStateLabels[getDueState(task.due, task.status)] : `Prioridade ${task.scoreGut}`}</small>
                       </span>
                     </button>
                   )) : (
@@ -890,21 +1049,14 @@ function App() {
       {selectedTask && (
         <TaskDetailDrawer
           task={selectedTask}
+          phases={phases}
           copiedTaskId={copiedTaskId}
-          statusOrder={statusOrder}
-          dueToInputValue={dueToInputValue}
-          inputValueToDue={inputValueToDue}
           onClose={() => setSelectedTaskId(null)}
           onDeleteTask={handleDeleteSelectedTask}
           onCopyPrompt={(task) => void copyPrompt(task)}
-          onEditTask={() => {
-            setIsCreatingTask(false)
-            setEditingTask({ ...selectedTask })
-          }}
           onConfirmChanges={(task) => {
             saveTaskChanges(task)
             showToast('Alterações confirmadas')
-            setSelectedTaskId(null)
           }}
         />
       )}
@@ -914,15 +1066,12 @@ function App() {
           editingTask={editingTask}
           isCreatingTask={isCreatingTask}
           phases={phases}
-          statusOrder={statusOrder}
           onClose={() => {
             setEditingTask(null)
             setIsCreatingTask(false)
           }}
           onFieldChange={(field, value) => setEditingTask({ ...editingTask, [field]: value })}
           onSave={handleSaveEditedTask}
-          dueToInputValue={dueToInputValue}
-          inputValueToDue={inputValueToDue}
         />
       )}
     </div>

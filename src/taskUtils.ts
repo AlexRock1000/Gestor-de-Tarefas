@@ -43,6 +43,26 @@ const parseDueDate = (due: string, referenceDate: Date) => {
 export const formatLocalDate = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
+export const formatDateForDisplay = (value: string) => {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : value
+}
+
+export const formatDateForInput = (value: string) => {
+  if (!value || value === 'Sem prazo' || value === 'Concluída') return ''
+  const normalized = normalizeDueDate(value)
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? formatDateForDisplay(normalized) : ''
+}
+
+export const parseBrazilianDate = (value: string) => {
+  const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/)
+  if (!match) return null
+  const [, day, month, year] = match
+  const date = new Date(Number(year), Number(month) - 1, Number(day))
+  if (date.getFullYear() !== Number(year) || date.getMonth() !== Number(month) - 1 || date.getDate() !== Number(day)) return null
+  return `${year}-${month}-${day}`
+}
+
 export const normalizeDueDate = (due: string, referenceDate = new Date()) => {
   if (due === 'Hoje') return formatLocalDate(referenceDate)
   const parsedDate = parseDueDate(due, referenceDate)
@@ -113,11 +133,44 @@ export const parseCsv = (content: string): string[][] => {
   return rows
 }
 
-export const computeScore = (gravidade: number, urgencia: number, tendencia: number) =>
-  gravidade * urgencia * tendencia
+export const computeScore = (importancia: number, urgencia: number) =>
+  importancia * urgencia
+
+export type ImportanceCategory = 'Baixa' | 'Alta' | 'Extrema'
+
+export const getImportanceCategory = (importance: number): ImportanceCategory => {
+  if (importance <= 2) return 'Baixa'
+  if (importance <= 4) return 'Alta'
+  return 'Extrema'
+}
+
+export const getImportanceValue = (category: ImportanceCategory) => ({
+  Baixa: 2,
+  Alta: 4,
+  Extrema: 5,
+})[category]
+
+export type UrgencyCategory = 'Pouca' | 'Media' | 'Muita'
+
+export const getUrgencyCategory = (urgency: number): UrgencyCategory => {
+  if (urgency <= 2) return 'Pouca'
+  if (urgency <= 4) return 'Media'
+  return 'Muita'
+}
+
+export const getUrgencyValue = (category: UrgencyCategory) => ({
+  Pouca: 2,
+  Media: 4,
+  Muita: 5,
+})[category]
+
+export const CRITICAL_PRIORITY_THRESHOLD = 20
+export const HIGH_PRIORITY_THRESHOLD = 12
 
 export const getDueState = (due: string, status: string, referenceDate = new Date()): DueState => {
   if (status === 'Concluído' || due === 'Concluída') return 'completed'
+  if (due === 'Hoje') return 'today'
+
   const dueDate = parseDueDate(due, referenceDate)
   if (!dueDate) return 'undated'
 
@@ -144,13 +197,34 @@ export const resolveDueForStatus = (status: string, currentDue: string) => {
 }
 
 export const getPriorityBand = (score: number) => {
-  if (score >= 80) return 'critical'
-  if (score >= 50) return 'high'
+  if (score >= CRITICAL_PRIORITY_THRESHOLD) return 'critical'
+  if (score >= HIGH_PRIORITY_THRESHOLD) return 'high'
   return 'low'
 }
 
 export const getPriorityLabel = (score: number) => {
-  if (score >= 80) return 'Alta prioridade'
-  if (score >= 50) return 'Média'
+  if (score >= CRITICAL_PRIORITY_THRESHOLD) return 'Alta prioridade'
+  if (score >= HIGH_PRIORITY_THRESHOLD) return 'Média'
   return 'Baixa'
+}
+
+export const describeRequestError = (error: unknown, fallback = 'Não foi possível sincronizar os dados agora.') => {
+  const rawMessage = error instanceof Error ? error.message : String(error ?? '')
+  const message = rawMessage.trim().toLowerCase()
+
+  if (!message) return fallback
+
+  if (message.includes('failed to fetch') || message.includes('network') || message.includes('load failed')) {
+    return 'Não foi possível conectar ao servidor. Verifique a rede e tente novamente.'
+  }
+
+  if (message.includes('request failed:') || /\b(4\d{2}|5\d{2})\b/.test(rawMessage)) {
+    return 'O servidor respondeu com erro. Tente novamente em instantes.'
+  }
+
+  if (message.includes('invalid') || message.includes('dados') || message.includes('required')) {
+    return 'Os dados enviados não são válidos. Revise as informações e tente novamente.'
+  }
+
+  return fallback
 }

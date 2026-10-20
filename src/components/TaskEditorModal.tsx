@@ -1,29 +1,25 @@
 import { useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
-import type { Phase, Status, Task } from '../types'
+import { formatDateForDisplay, getImportanceCategory, getImportanceValue, getUrgencyCategory, getUrgencyValue } from '../taskUtils'
+import type { Phase, Task } from '../types'
+import { BrazilianDateInput } from './BrazilianDateInput'
 
 type TaskEditorModalProps = {
   editingTask: Task
   phases: { name: Phase; tone: string; accent: string }[]
-  statusOrder: Status[]
   onClose: () => void
   onFieldChange: <K extends keyof Task>(field: K, value: Task[K]) => void
   onSave: () => void
   isCreatingTask: boolean
-  dueToInputValue: (due: string) => string
-  inputValueToDue: (value: string) => string
 }
 
 export function TaskEditorModal({
   editingTask,
   phases,
-  statusOrder,
   onClose,
   onFieldChange,
   onSave,
   isCreatingTask,
-  dueToInputValue,
-  inputValueToDue,
 }: TaskEditorModalProps) {
   const titleInputRef = useRef<HTMLInputElement | null>(null)
 
@@ -32,17 +28,34 @@ export function TaskEditorModal({
     titleInputRef.current?.select()
   }, [editingTask.id, isCreatingTask])
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose()
+      }
+
+      if ((event.key === 'Enter' || event.key === 'NumpadEnter') && !(titleInputRef.current === document.activeElement && event.shiftKey)) {
+        if (!document.body.contains(document.activeElement) || document.activeElement instanceof HTMLElement && document.activeElement.tagName !== 'TEXTAREA') {
+          onSave()
+        }
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [onClose, onSave])
+
   const titleError = !editingTask.title.trim()
   const responsibleError = !editingTask.responsible.trim()
   const saveDisabled = titleError || responsibleError
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-card" onClick={(event) => event.stopPropagation()}>
+      <div className="modal-card" role="dialog" aria-modal="true" aria-labelledby="task-editor-title" onClick={(event) => event.stopPropagation()}>
         <div className="modal-header">
           <div>
             <p className="eyebrow">{isCreatingTask ? 'NOVA TAREFA' : 'EDIÇÃO DE TAREFA'}</p>
-            <h3>{isCreatingTask ? 'Configurar tarefa' : 'Detalhes da operação'}</h3>
+            <h3 id="task-editor-title">{isCreatingTask ? 'Configurar tarefa' : 'Detalhes da operação'}</h3>
           </div>
           <button className="icon-button" onClick={onClose} aria-label="Fechar modal">
             <X size={18} />
@@ -61,36 +74,20 @@ export function TaskEditorModal({
             {titleError && <small className="field-error">Informe um título para salvar a tarefa.</small>}
           </label>
 
-          <div className="modal-grid">
-            <label className="field">
-              <span>Fase</span>
-              <select value={editingTask.phase} onChange={(event) => onFieldChange('phase', event.target.value as Phase)}>
-                {phases.map((phase) => (
-                  <option key={phase.name} value={phase.name}>{phase.name}</option>
-                ))}
-              </select>
-            </label>
-
-            <label className="field">
-              <span>Status</span>
-              <select value={editingTask.status} onChange={(event) => onFieldChange('status', event.target.value as Status)}>
-                {statusOrder.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
-            </label>
-          </div>
+          <label className="field">
+            <span>Fase</span>
+            <select value={editingTask.phase} onChange={(event) => onFieldChange('phase', event.target.value as Phase)}>
+              {phases.map((phase) => (
+                <option key={phase.name} value={phase.name}>{phase.name}</option>
+              ))}
+            </select>
+          </label>
 
           <div className="modal-grid">
             <label className="field">
               <span>Prazo</span>
-              <input
-                type="date"
-                value={dueToInputValue(editingTask.due)}
-                onChange={(event) => onFieldChange('due', inputValueToDue(event.target.value))}
-              />
+              <BrazilianDateInput value={editingTask.due} onChange={(value) => onFieldChange('due', value)} />
             </label>
-
             <label className="field">
               <span>Responsável</span>
               <input
@@ -105,7 +102,7 @@ export function TaskEditorModal({
           <div className="modal-grid">
             <label className="field">
               <span>Criada em</span>
-              <input value={editingTask.createdAt} readOnly aria-readonly="true" />
+              <input value={formatDateForDisplay(editingTask.createdAt)} readOnly aria-readonly="true" />
             </label>
 
             <label className="field">
@@ -115,32 +112,33 @@ export function TaskEditorModal({
           </div>
 
           <div className="gut-grid">
-            {(['gravidade', 'urgencia', 'tendencia'] as const).map((field) => (
-              <label key={field} className="gut-field">
-                <span>{field}</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={5}
-                  value={editingTask[field]}
-                  onChange={(event) => {
-                    const nextValue = Number(event.target.value)
-                    const safeValue = Number.isNaN(nextValue) ? 1 : Math.min(5, Math.max(1, nextValue))
-                    onFieldChange(field, safeValue)
-                  }}
-                />
-              </label>
-            ))}
+            <label className="gut-field">
+              <span>Importância</span>
+              <select
+                value={getImportanceCategory(editingTask.importancia)}
+                onChange={(event) => onFieldChange('importancia', getImportanceValue(event.target.value as 'Baixa' | 'Alta' | 'Extrema'))}
+              >
+                <option value="Extrema">Extrema</option>
+                <option value="Alta">Alta</option>
+                <option value="Baixa">Baixa</option>
+              </select>
+            </label>
+            <label className="gut-field">
+              <span>Urgência</span>
+              <select
+                value={getUrgencyCategory(editingTask.urgencia)}
+                onChange={(event) => onFieldChange('urgencia', getUrgencyValue(event.target.value as 'Pouca' | 'Media' | 'Muita'))}
+              >
+                <option value="Muita">Muita</option>
+                <option value="Media">Media</option>
+                <option value="Pouca">Pouca</option>
+              </select>
+            </label>
           </div>
 
           <label className="field">
-            <span>Prompt de IA</span>
-            <textarea rows={3} value={editingTask.promptIa} onChange={(event) => onFieldChange('promptIa', event.target.value)} />
-          </label>
-
-          <label className="field">
             <span>Anotações</span>
-            <textarea rows={3} value={editingTask.observacoes} onChange={(event) => onFieldChange('observacoes', event.target.value)} />
+            <textarea className="annotation-input" rows={8} value={editingTask.observacoes} onChange={(event) => onFieldChange('observacoes', event.target.value)} />
           </label>
         </div>
 

@@ -1,11 +1,14 @@
-import { type ChangeEvent, useEffect, useMemo, useState } from 'react'
+import { type ChangeEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
   computeScore,
+  CRITICAL_PRIORITY_THRESHOLD,
+  describeRequestError,
   formatLocalDate,
   getDueState,
   parseCsv,
   getPriorityBand,
   getPriorityLabel,
+  HIGH_PRIORITY_THRESHOLD,
   normalizeDueDate,
   resolveDueForStatus,
   type DueState,
@@ -65,10 +68,9 @@ export const initialTasks: Task[] = [
     due: formatLocalDate(new Date()),
     createdAt: '12 set',
     responsible: 'Daniel Rocha',
-    gravidade: 5,
+    importancia: 5,
     urgencia: 4,
-    tendencia: 5,
-    scoreGut: 100,
+    scoreGut: 20,
     tag: 'Diagnóstico',
     checklist: [
       { label: 'Exportar relatório do ERP', done: true },
@@ -86,10 +88,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-18',
     createdAt: '14 set',
     responsible: 'Ana Maria',
-    gravidade: 4,
+    importancia: 4,
     urgencia: 3,
-    tendencia: 5,
-    scoreGut: 60,
+    scoreGut: 12,
     tag: 'Política',
     checklist: [
       { label: 'Levantar frequência atual', done: false },
@@ -107,10 +108,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-20',
     createdAt: '10 set',
     responsible: 'Lucas Costa',
-    gravidade: 4,
+    importancia: 4,
     urgencia: 4,
-    tendencia: 4,
-    scoreGut: 64,
+    scoreGut: 16,
     tag: 'Contratos',
     checklist: [
       { label: 'Consolidar contratos vigentes', done: true },
@@ -128,10 +128,9 @@ export const initialTasks: Task[] = [
     due: 'Concluída',
     createdAt: '08 set',
     responsible: 'Fernanda Silva',
-    gravidade: 3,
+    importancia: 3,
     urgencia: 2,
-    tendencia: 5,
-    scoreGut: 30,
+    scoreGut: 6,
     tag: 'Organização',
     checklist: [
       { label: 'Criar estrutura de pastas', done: true },
@@ -149,10 +148,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-24',
     createdAt: '16 set',
     responsible: 'Bruno Souza',
-    gravidade: 5,
+    importancia: 5,
     urgencia: 4,
-    tendencia: 5,
-    scoreGut: 100,
+    scoreGut: 20,
     tag: 'Fluxo',
     checklist: [
       { label: 'Entrevistar responsáveis', done: false },
@@ -170,10 +168,9 @@ export const initialTasks: Task[] = [
     due: '2026-09-26',
     createdAt: '15 set',
     responsible: 'Miguel Nunes',
-    gravidade: 5,
+    importancia: 5,
     urgencia: 4,
-    tendencia: 3,
-    scoreGut: 60,
+    scoreGut: 20,
     tag: 'IA & Automação',
     checklist: [
       { label: 'Mapear rotina manual atual', done: true },
@@ -187,6 +184,72 @@ export const initialTasks: Task[] = [
 
 const storageKey = 'gestor-de-tarefas-v1'
 const activityStorageKey = `${storageKey}-activity`
+const pendingOperationsKey = `${storageKey}-pending-operations`
+const API_BASE_URL = '/api'
+
+type PendingOperation =
+  | { kind: 'create-task'; task: Task }
+  | { kind: 'update-task'; task: Task }
+  | { kind: 'delete-task'; taskId: number }
+  | { kind: 'delete-all-tasks' }
+  | { kind: 'create-activity'; activity: Omit<Activity, 'id'>; localId: number }
+
+const readPendingOperations = (): PendingOperation[] => {
+  if (typeof window === 'undefined') return []
+  try {
+    const value = JSON.parse(window.localStorage.getItem(pendingOperationsKey) ?? '[]') as unknown
+    return Array.isArray(value) ? value as PendingOperation[] : []
+  } catch {
+    return []
+  }
+}
+
+const writePendingOperations = (operations: PendingOperation[]) => {
+  if (typeof window !== 'undefined') {
+    window.localStorage.setItem(pendingOperationsKey, JSON.stringify(operations))
+  }
+}
+
+const apiRequest = async <T>(endpoint: string, options?: RequestInit): Promise<T> => {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers ?? {}),
+    },
+    ...options,
+  })
+
+  if (!response.ok) {
+    if (response.status === 401 && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('gestor:session-expired'))
+    }
+    throw new Error(`Request failed: ${response.status}`)
+  }
+
+  if (response.status === 204) {
+    return undefined as T
+  }
+
+  return response.json() as Promise<T>
+}
+
+const normalizeTask = (value: unknown): Task => {
+  const task = value as Record<string, unknown>
+  const importancia = Number(task.importancia ?? task.gravidade ?? 3)
+  const urgencia = Number(task.urgencia ?? 3)
+  const normalizedFields = Object.fromEntries(
+    Object.entries(task).filter(([key]) => key !== 'gravidade' && key !== 'tendencia'),
+  )
+
+  return {
+    ...normalizedFields,
+    importancia,
+    urgencia,
+    scoreGut: computeScore(importancia, urgencia),
+    due: normalizeDueDate(String(task.due ?? 'Sem prazo')),
+  } as Task
+}
 
 const initialActivities: Activity[] = [
   { id: 1, actor: 'Daniel', tone: 'teal', message: 'concluiu', taskTitle: 'Centralizar POPs', time: 'Há 24 min' },
@@ -194,25 +257,23 @@ const initialActivities: Activity[] = [
   { id: 3, actor: 'Lucas', tone: 'coral', message: 'adicionou um item ao checklist', taskTitle: '', time: 'Há 2 h' },
 ]
 
-export function useTaskBoard() {
+export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (typeof window === 'undefined') {
-      return initialTasks
+      return []
     }
 
     const stored = window.localStorage.getItem(storageKey)
 
     if (!stored) {
-      return initialTasks
+      return []
     }
 
     try {
-      const parsed = JSON.parse(stored) as Task[]
-      return Array.isArray(parsed) && parsed.length
-        ? parsed.map((task) => ({ ...task, due: normalizeDueDate(task.due) }))
-        : initialTasks
+      const parsed = JSON.parse(stored) as unknown[]
+      return Array.isArray(parsed) ? parsed.map(normalizeTask) : []
     } catch {
-      return initialTasks
+      return []
     }
   })
 
@@ -230,17 +291,190 @@ export function useTaskBoard() {
   const [isCreatingTask, setIsCreatingTask] = useState(false)
   const [draggedTaskId, setDraggedTaskId] = useState<number | null>(null)
   const [dragOverStatus, setDragOverStatus] = useState<Status | null>(null)
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true)
+  const [isLoadingActivities, setIsLoadingActivities] = useState(true)
+  const [syncError, setSyncError] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>(() => {
-    if (typeof window === 'undefined') return initialActivities
+    if (typeof window === 'undefined') return []
     const stored = window.localStorage.getItem(activityStorageKey)
-    if (!stored) return initialActivities
+    if (!stored) return []
     try {
       const parsed = JSON.parse(stored) as Activity[]
-      return Array.isArray(parsed) && parsed.length ? parsed : initialActivities
+      return Array.isArray(parsed) ? parsed : []
     } catch {
-      return initialActivities
+      return []
     }
   })
+  const isFlushingOperations = useRef(false)
+  const isSyncing = useRef(false)
+  const syncRequestedAgain = useRef(false)
+
+  const enqueueOperation = (operation: PendingOperation) => {
+    const pending = readPendingOperations()
+    if (operation.kind === 'delete-task') {
+      const wasCreatedOffline = pending.some(
+        (item) => item.kind === 'create-task' && item.task.id === operation.taskId,
+      )
+      if (wasCreatedOffline && isFlushingOperations.current) {
+        writePendingOperations([...pending, operation])
+        return
+      }
+      const remaining = pending.filter((item) => {
+        if (item.kind === 'create-task' || item.kind === 'update-task') {
+          return item.task.id !== operation.taskId
+        }
+        return item.kind !== 'delete-task' || item.taskId !== operation.taskId
+      })
+      writePendingOperations(wasCreatedOffline ? remaining : [...remaining, operation])
+      return
+    }
+    writePendingOperations([...pending, operation])
+  }
+
+  const flushPendingOperations = async () => {
+    if (isFlushingOperations.current) return
+    isFlushingOperations.current = true
+    let pending = readPendingOperations()
+    try {
+      while (pending.length) {
+        const operation = pending[0]
+        let remappedTaskId: { from: number; to: number } | null = null
+        if (operation.kind === 'create-task') {
+        const savedTask = await apiRequest<Task>('/tasks', {
+          method: 'POST',
+          body: JSON.stringify(operation.task),
+        })
+        const oldId = operation.task.id
+        remappedTaskId = { from: oldId, to: savedTask.id }
+        setTasks((current) => current.map((task) => task.id === oldId ? savedTask : task))
+        setSelectedTaskId((current) => current === oldId ? savedTask.id : current)
+        if (typeof window !== 'undefined') {
+          const localTasks = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]') as Task[]
+          window.localStorage.setItem(storageKey, JSON.stringify(localTasks.map((task) => task.id === oldId ? savedTask : task)))
+        }
+        } else if (operation.kind === 'update-task') {
+        try {
+          await apiRequest<Task>(`/tasks/${operation.task.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify(operation.task),
+          })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'Request failed: 404') throw error
+          const recreatedTask = await apiRequest<Task>('/tasks', {
+            method: 'POST',
+            body: JSON.stringify(operation.task),
+          })
+          const oldId = operation.task.id
+          remappedTaskId = { from: oldId, to: recreatedTask.id }
+          setTasks((current) => current.map((task) => task.id === oldId ? recreatedTask : task))
+          setSelectedTaskId((current) => current === oldId ? recreatedTask.id : current)
+        }
+        } else if (operation.kind === 'delete-task') {
+        try {
+          await apiRequest(`/tasks/${operation.taskId}`, { method: 'DELETE' })
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'Request failed: 404') throw error
+        }
+        } else if (operation.kind === 'delete-all-tasks') {
+          await apiRequest('/tasks', { method: 'DELETE' })
+        } else {
+        const savedActivity = await apiRequest<Activity>('/activities', {
+          method: 'POST',
+          body: JSON.stringify(operation.activity),
+        })
+        setActivities((current) => current.map((activity) =>
+          activity.id === operation.localId ? savedActivity : activity,
+        ))
+        }
+
+        const latestPending = readPendingOperations()
+        if (JSON.stringify(latestPending[0]) === JSON.stringify(operation)) latestPending.shift()
+        pending = remappedTaskId
+          ? latestPending.map((item) => {
+              if (item.kind === 'update-task' && item.task.id === remappedTaskId?.from) {
+                return { ...item, task: { ...item.task, id: remappedTaskId.to } }
+              }
+              if (item.kind === 'delete-task' && item.taskId === remappedTaskId?.from) {
+                return { ...item, taskId: remappedTaskId.to }
+              }
+              return item
+            })
+          : latestPending
+        writePendingOperations(pending)
+      }
+    } finally {
+      isFlushingOperations.current = false
+    }
+  }
+
+  const syncFromServer = async () => {
+    if (isSyncing.current) {
+      syncRequestedAgain.current = true
+      return
+    }
+    isSyncing.current = true
+    setSyncError(null)
+    setIsLoadingTasks(true)
+    setIsLoadingActivities(true)
+
+    try {
+      await flushPendingOperations()
+      const [savedTasks, savedActivities] = await Promise.all([
+        apiRequest<Task[]>('/tasks'),
+        apiRequest<Activity[]>('/activities'),
+      ])
+      const pending = readPendingOperations()
+      const mergedTasks = savedTasks.map(normalizeTask)
+      const mergedActivities = [...savedActivities]
+      for (const operation of pending) {
+        if (operation.kind === 'create-task' || operation.kind === 'update-task') {
+          const index = mergedTasks.findIndex((task) => task.id === operation.task.id)
+          if (index < 0) mergedTasks.push(operation.task)
+          else mergedTasks[index] = operation.task
+        } else if (operation.kind === 'delete-task') {
+          const index = mergedTasks.findIndex((task) => task.id === operation.taskId)
+          if (index >= 0) mergedTasks.splice(index, 1)
+        } else if (operation.kind === 'delete-all-tasks') {
+          mergedTasks.length = 0
+        } else if (!mergedActivities.some((activity) => activity.id === operation.localId)) {
+          mergedActivities.unshift({ ...operation.activity, id: operation.localId })
+        }
+      }
+
+      setTasks(mergedTasks)
+      setActivities(mergedActivities)
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+    } finally {
+      setIsLoadingTasks(false)
+      setIsLoadingActivities(false)
+      isSyncing.current = false
+      if (syncRequestedAgain.current && syncEnabled) {
+        syncRequestedAgain.current = false
+        void syncFromServer()
+      }
+    }
+  }
+
+  const syncFromServerRef = useRef(syncFromServer)
+  syncFromServerRef.current = syncFromServer
+
+  useEffect(() => {
+    if (!syncEnabled) return
+    const sync = () => { void syncFromServerRef.current() }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') sync()
+    }
+    sync()
+    window.addEventListener('online', sync)
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('online', sync)
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [syncEnabled])
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -280,13 +514,13 @@ export function useTaskBoard() {
         (deadlineFilter === 'Em aberto' && task.status !== 'Concluído')
       const gutMatches =
         gutFilter === 'Todos' ||
-        (gutFilter === 'Críticas (80+)' && task.scoreGut >= 80) ||
-        (gutFilter === 'Altas (50-79)' && task.scoreGut >= 50 && task.scoreGut < 80) ||
-        (gutFilter === 'Baixas (até 49)' && task.scoreGut < 50)
+        (gutFilter === 'Críticas (20+)' && task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD) ||
+        (gutFilter === 'Altas (12-19)' && task.scoreGut >= HIGH_PRIORITY_THRESHOLD && task.scoreGut < CRITICAL_PRIORITY_THRESHOLD) ||
+        (gutFilter === 'Baixas (até 11)' && task.scoreGut < HIGH_PRIORITY_THRESHOLD)
       const quickMatches =
         quickFilter === 'Todos' ||
         (quickFilter === 'Hoje' && (dueState === 'today' || dueState === 'overdue')) ||
-        (quickFilter === 'Urgentes' && (task.scoreGut >= 80 || dueState === 'today' || dueState === 'overdue')) ||
+        (quickFilter === 'Urgentes' && (task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD || dueState === 'today' || dueState === 'overdue')) ||
         (quickFilter === 'Concluídas' && task.status === 'Concluído')
 
       return phaseMatches && statusMatches && titleMatches && responsibleMatches && deadlineMatches && gutMatches && quickMatches
@@ -306,47 +540,84 @@ export function useTaskBoard() {
       )
     : 0
 
-  const updateTask = (taskId: number, updates: Partial<Task>) => {
+  const updateTask = async (taskId: number, updates: Partial<Task>) => {
+    const currentTask = tasks.find((task) => task.id === taskId)
+    if (!currentTask) {
+      return
+    }
+
+    const nextImportancia = updates.importancia ?? currentTask.importancia
+    const nextUrgencia = updates.urgencia ?? currentTask.urgencia
+    const nextTask = {
+      ...currentTask,
+      ...updates,
+      scoreGut: computeScore(nextImportancia, nextUrgencia),
+    }
+
     setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        const nextGravidade = updates.gravidade ?? task.gravidade
-        const nextUrgencia = updates.urgencia ?? task.urgencia
-        const nextTendencia = updates.tendencia ?? task.tendencia
-
-        return {
-          ...task,
-          ...updates,
-          scoreGut: computeScore(nextGravidade, nextUrgencia, nextTendencia),
-        }
-      }),
+      current.map((task) => (task.id === taskId ? nextTask : task)),
     )
+
+    try {
+      await apiRequest<Task>(`/tasks/${taskId}`, {
+        method: 'PATCH',
+        body: JSON.stringify(nextTask),
+      })
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+      enqueueOperation({ kind: 'update-task', task: nextTask })
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((task) => (task.id === taskId ? nextTask : task))))
+      }
+    }
   }
 
-  const updateStatus = (id: number, status: Status) => {
+  const recordActivity = async (activity: Omit<Activity, 'id'>) => {
+    try {
+      const savedActivity = await apiRequest<Activity>('/activities', {
+        method: 'POST',
+        body: JSON.stringify(activity),
+      })
+      setActivities((current) => [savedActivity, ...current])
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+      const localId = Date.now()
+      setActivities((current) => [{ ...activity, id: localId }, ...current])
+      enqueueOperation({ kind: 'create-activity', activity, localId })
+    }
+  }
+
+  const updateStatus = async (id: number, status: Status) => {
     const task = tasks.find((item) => item.id === id)
     if (!task) {
       return
     }
 
     const nextDue = resolveDueForStatus(status, task.due)
-    updateTask(id, { status, due: nextDue })
+    const nextTask = { ...task, status, due: nextDue }
+    setTasks((current) => current.map((item) => (item.id === id ? nextTask : item)))
+
+    try {
+      await apiRequest<Task>(`/tasks/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(nextTask),
+      })
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+      enqueueOperation({ kind: 'update-task', task: nextTask })
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(storageKey, JSON.stringify(tasks.map((item) => (item.id === id ? nextTask : item))))
+      }
+    }
 
     if (task.status !== status) {
-      setActivities((current) => [
-        {
-          id: Date.now(),
-          actor: 'Daniel',
-          tone: (status === 'Concluído' ? 'teal' : 'amber') as Activity['tone'],
-          message: 'moveu para',
-          taskTitle: task.title,
-          time: 'Agora',
-        },
-        ...current,
-      ].slice(0, 12))
+      void recordActivity({
+        actor: actorName,
+        tone: status === 'Concluído' ? 'teal' : 'amber',
+        message: 'moveu para',
+        taskTitle: task.title,
+        time: 'Agora',
+      })
     }
   }
 
@@ -360,26 +631,26 @@ export function useTaskBoard() {
 
   const toggleChecklist = (taskId: number, itemIndex: number) => {
     const task = tasks.find((item) => item.id === taskId)
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
+    if (!task || !task.checklist[itemIndex]) return
 
-        return {
-          ...task,
-          checklist: task.checklist.map((item, index) =>
-            index === itemIndex ? { ...item, done: !item.done } : item,
-          ),
-        }
-      }),
+    const checklist = task.checklist.map((item, index) =>
+      index === itemIndex ? { ...item, done: !item.done } : item,
     )
-    if (task) {
-      setActivities((current) => [
-        { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'atualizou o checklist de', taskTitle: task.title, time: 'Agora' },
-        ...current,
-      ].slice(0, 12))
-    }
+    const wasChecklistComplete = task.checklist.length > 0 && task.checklist.every((item) => item.done)
+    const isChecklistComplete = checklist.length > 0 && checklist.every((item) => item.done)
+    const completesTask = isChecklistComplete && task.status !== 'Concluído'
+    const reopensTask = wasChecklistComplete && !isChecklistComplete && task.status === 'Concluído'
+    const status: Status = completesTask ? 'Concluído' : reopensTask ? 'Pendente' : task.status
+    const due = completesTask || reopensTask ? resolveDueForStatus(status, task.due) : task.due
+
+    void updateTask(taskId, { checklist, status, due })
+    void recordActivity({
+      actor: actorName,
+      tone: completesTask ? 'teal' : 'coral',
+      message: completesTask ? 'concluiu ao finalizar o checklist de' : reopensTask ? 'reabriu ao desmarcar o checklist de' : 'atualizou o checklist de',
+      taskTitle: task.title,
+      time: 'Agora',
+    })
   }
 
   const addTask = () => {
@@ -393,10 +664,9 @@ export function useTaskBoard() {
       due: 'Sem prazo',
       createdAt,
       responsible: 'Não atribuída',
-      gravidade: 3,
+      importancia: 3,
       urgencia: 3,
-      tendencia: 3,
-      scoreGut: 27,
+      scoreGut: 9,
       tag: 'Nova',
       checklist: [{ label: 'Definir próximo passo', done: false }],
       promptIa: 'Estruture os próximos três passos práticos para esta tarefa, considerando prioridade, risco e tempo de execução.',
@@ -408,68 +678,66 @@ export function useTaskBoard() {
     setEditingTask(newTask)
   }
 
-  const deleteTask = (taskId: number) => {
+  const deleteTask = async (taskId: number) => {
+    const task = tasks.find((item) => item.id === taskId)
     setTasks((current) => {
-      const nextTasks = current.filter((task) => task.id !== taskId)
+      const nextTasks = current.filter((taskItem) => taskItem.id !== taskId)
       if (selectedTaskId === taskId) {
         setSelectedTaskId(nextTasks[0]?.id ?? null)
       }
       return nextTasks
     })
-    const task = tasks.find((item) => item.id === taskId)
-    if (task) {
-      setActivities((current) => [
-        { id: Date.now(), actor: 'Daniel', tone: 'coral' as const, message: 'removeu', taskTitle: task.title, time: 'Agora' },
-        ...current,
-      ].slice(0, 12))
+
+    try {
+      await apiRequest(`/tasks/${taskId}`, { method: 'DELETE' })
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+      enqueueOperation({ kind: 'delete-task', taskId })
+      if (typeof window !== 'undefined') {
+        const nextTasks = tasks.filter((taskItem) => taskItem.id !== taskId)
+        window.localStorage.setItem(storageKey, JSON.stringify(nextTasks))
+      }
     }
+
+    if (task) void recordActivity({ actor: actorName, tone: 'coral', message: 'removeu', taskTitle: task.title, time: 'Agora' })
+  }
+
+  const deleteAllTasks = () => {
+    if (!tasks.length) return
+    const deletedCount = tasks.length
+    setTasks([])
+    setSelectedTaskId(null)
+    enqueueOperation({ kind: 'delete-all-tasks' })
+    void syncFromServer()
+    void recordActivity({
+      actor: actorName,
+      tone: 'coral',
+      message: 'excluiu todas as tarefas',
+      taskTitle: `${deletedCount} tarefa${deletedCount === 1 ? '' : 's'}`,
+      time: 'Agora',
+      createdAt: new Date().toISOString(),
+    })
   }
 
   const addChecklistItem = (taskId: number) => {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        return {
-          ...task,
-          checklist: [...task.checklist, { label: `Novo item ${task.checklist.length + 1}`, done: false }],
-        }
-      }),
-    )
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task) return
+    void updateTask(taskId, {
+      checklist: [...task.checklist, { label: `Novo item ${task.checklist.length + 1}`, done: false }],
+    })
   }
 
   const removeChecklistItem = (taskId: number, itemIndex: number) => {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        return {
-          ...task,
-          checklist: task.checklist.filter((_, index) => index !== itemIndex),
-        }
-      }),
-    )
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task) return
+    void updateTask(taskId, { checklist: task.checklist.filter((_, index) => index !== itemIndex) })
   }
 
   const updateChecklistLabel = (taskId: number, itemIndex: number, label: string) => {
-    setTasks((current) =>
-      current.map((task) => {
-        if (task.id !== taskId) {
-          return task
-        }
-
-        return {
-          ...task,
-          checklist: task.checklist.map((item, index) =>
-            index === itemIndex ? { ...item, label } : item,
-          ),
-        }
-      }),
-    )
+    const task = tasks.find((item) => item.id === taskId)
+    if (!task || !task.checklist[itemIndex]) return
+    const checklist = task.checklist.map((item, index) => index === itemIndex ? { ...item, label } : item)
+    void updateTask(taskId, { checklist })
   }
 
   const copyPrompt = async (task: Task) => {
@@ -488,10 +756,9 @@ export function useTaskBoard() {
       'Status',
       'Responsável',
       'Prazo',
-      'Gravidade',
+      'Importância',
       'Urgência',
-      'Tendência',
-      'Prioridade GUT',
+      'Prioridade',
       'Tag',
       'Checklist',
       'Prompt de IA',
@@ -504,9 +771,8 @@ export function useTaskBoard() {
       task.status,
       task.responsible,
       task.due,
-      task.gravidade,
+      task.importancia,
       task.urgencia,
-      task.tendencia,
       task.scoreGut,
       task.tag,
       JSON.stringify(task.checklist),
@@ -544,13 +810,11 @@ export function useTaskBoard() {
       const index = column(name)
       return index < 0 ? '' : row[index] ?? ''
     }
-    const legacyGutFactors = (score: number) => {
-      for (let gravidade = 1; gravidade <= 5; gravidade += 1) {
+    const priorityFactorsFromScore = (score: number) => {
+      for (let importancia = 1; importancia <= 5; importancia += 1) {
         for (let urgencia = 1; urgencia <= 5; urgencia += 1) {
-          for (let tendencia = 1; tendencia <= 5; tendencia += 1) {
-            if (computeScore(gravidade, urgencia, tendencia) === score) {
-              return { gravidade, urgencia, tendencia }
-            }
+          if (computeScore(importancia, urgencia) === score) {
+            return { importancia, urgencia }
           }
         }
       }
@@ -568,21 +832,22 @@ export function useTaskBoard() {
       const statusValue = valueAt(row, 'Status')
       const phase = phases.find((item) => item.name === phaseValue)?.name ?? 'Processos'
       const status = statusOrder.includes(statusValue as Status) ? statusValue as Status : 'Pendente'
-      const gutColumns = ['Gravidade', 'Urgência', 'Tendência'].map((name) => column(name))
-      let gut: { gravidade: number; urgencia: number; tendencia: number }
-      if (gutColumns.every((index) => index >= 0)) {
-        const values = gutColumns.map((index) => Number(row[index]))
+      const importanceColumn = column('Importância') >= 0 ? column('Importância') : column('Gravidade')
+      const urgencyColumn = column('Urgência')
+      let priority: { importancia: number; urgencia: number }
+      if (importanceColumn >= 0 && urgencyColumn >= 0) {
+        const values = [Number(row[importanceColumn]), Number(row[urgencyColumn])]
         if (values.some((value) => !Number.isInteger(value) || value < 1 || value > 5)) {
-          throw new Error(`A linha ${index + 2} tem valores GUT fora do intervalo de 1 a 5.`)
+          throw new Error(`A linha ${index + 2} tem valores de prioridade fora do intervalo de 1 a 5.`)
         }
-        gut = { gravidade: values[0], urgencia: values[1], tendencia: values[2] }
+        priority = { importancia: values[0], urgencia: values[1] }
       } else {
-        const score = Number(valueAt(row, 'Prioridade GUT'))
-        const reconstructedGut = Number.isInteger(score) ? legacyGutFactors(score) : null
-        if (!reconstructedGut) {
-          throw new Error(`A linha ${index + 2} não tem fatores GUT válidos para reconstruir a prioridade.`)
+        const score = Number(valueAt(row, 'Prioridade') || valueAt(row, 'Prioridade GUT'))
+        const reconstructedPriority = Number.isInteger(score) ? priorityFactorsFromScore(score) : null
+        if (!reconstructedPriority) {
+          throw new Error(`A linha ${index + 2} não tem fatores válidos para reconstruir a prioridade.`)
         }
-        gut = reconstructedGut
+        priority = reconstructedPriority
       }
 
       let checklist: ChecklistItem[] = [{ label: 'Definir próximo passo', done: false }]
@@ -619,8 +884,8 @@ export function useTaskBoard() {
         due: normalizeDueDate(due),
         createdAt: 'Importada',
         responsible: valueAt(row, 'Responsável').trim() || 'Não atribuída',
-        ...gut,
-        scoreGut: computeScore(gut.gravidade, gut.urgencia, gut.tendencia),
+        ...priority,
+        scoreGut: computeScore(priority.importancia, priority.urgencia),
         tag: valueAt(row, 'Tag').trim() || 'Importada',
         checklist,
         promptIa: valueAt(row, 'Prompt de IA') || 'Estruture os próximos passos práticos para esta tarefa, considerando prioridade, risco e prazo.',
@@ -628,15 +893,21 @@ export function useTaskBoard() {
       } satisfies Task
     })
 
-    setTasks((current) => [...current, ...importedTasks])
-    setActivities((current) => [
-      { id: Date.now(), actor: 'Daniel', tone: 'teal' as const, message: 'importou', taskTitle: `${importedTasks.length} tarefas via CSV`, time: 'Agora' },
-      ...current,
-    ].slice(0, 12))
-    return importedTasks.length
+    const savedTasks = await apiRequest<Task[]>('/tasks/bulk', {
+      method: 'POST',
+      body: JSON.stringify({ tasks: importedTasks }),
+    }).catch((error: unknown) => {
+      setSyncError(describeRequestError(error))
+      for (const task of importedTasks) enqueueOperation({ kind: 'create-task', task })
+      return importedTasks
+    })
+    setTasks((current) => [...current, ...savedTasks])
+    setSyncError(null)
+    void recordActivity({ actor: actorName, tone: 'teal', message: 'importou', taskTitle: `${savedTasks.length} tarefas via CSV`, time: 'Agora' })
+    return savedTasks.length
   }
 
-  const saveEditedTask = () => {
+  const saveEditedTask = async () => {
     if (!editingTask) {
       return
     }
@@ -649,44 +920,67 @@ export function useTaskBoard() {
       return
     }
 
+    const status = isCreatingTask ? 'Pendente' : editingTask.status
     const normalizedTask = {
       ...editingTask,
+      status,
       title: trimmedTitle,
       responsible: trimmedResponsible,
       tag: trimmedTag || 'Geral',
-      due: resolveDueForStatus(editingTask.status, editingTask.due),
-      scoreGut: computeScore(
-        editingTask.gravidade,
-        editingTask.urgencia,
-        editingTask.tendencia,
-      ),
+      due: resolveDueForStatus(status, editingTask.due),
+      scoreGut: computeScore(editingTask.importancia, editingTask.urgencia),
     }
 
-    if (isCreatingTask) {
-      setTasks((current) => [...current, normalizedTask])
-    } else {
-      setTasks((current) =>
-        current.map((task) =>
-          task.id === normalizedTask.id
-            ? { ...task, ...normalizedTask }
-            : task,
-        ),
-      )
+    try {
+      if (isCreatingTask) {
+        const createdTask = await apiRequest<Task>('/tasks', {
+          method: 'POST',
+          body: JSON.stringify(normalizedTask),
+        })
+        setTasks((current) => [...current, createdTask])
+        setSelectedTaskId(createdTask.id)
+      } else {
+        const updatedTask = await apiRequest<Task>(`/tasks/${normalizedTask.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify(normalizedTask),
+        })
+        setTasks((current) =>
+          current.map((task) =>
+            task.id === updatedTask.id
+              ? { ...task, ...updatedTask }
+              : task,
+          ),
+        )
+        setSelectedTaskId(updatedTask.id)
+      }
+      setSyncError(null)
+    } catch (error) {
+      setSyncError(describeRequestError(error))
+      if (isCreatingTask) {
+        enqueueOperation({ kind: 'create-task', task: normalizedTask })
+        setTasks((current) => [...current, normalizedTask])
+      } else {
+        enqueueOperation({ kind: 'update-task', task: normalizedTask })
+        setTasks((current) =>
+          current.map((task) =>
+            task.id === normalizedTask.id
+              ? { ...task, ...normalizedTask }
+              : task,
+          ),
+        )
+      }
+      setSelectedTaskId(normalizedTask.id)
     }
-    setSelectedTaskId(normalizedTask.id)
+
     setEditingTask(null)
     setIsCreatingTask(false)
-    setActivities((current) => [
-      {
-        id: Date.now(),
-        actor: 'Daniel',
-        tone: isCreatingTask ? 'teal' as const : 'amber' as const,
-        message: isCreatingTask ? 'criou' : 'editou',
-        taskTitle: normalizedTask.title,
-        time: 'Agora',
-      },
-      ...current,
-    ].slice(0, 12))
+    void recordActivity({
+      actor: actorName,
+      tone: isCreatingTask ? 'teal' : 'amber',
+      message: isCreatingTask ? 'criou' : 'editou',
+      taskTitle: normalizedTask.title,
+      time: 'Agora',
+    })
   }
 
   const phaseStats = phases.map((phase) => {
@@ -726,10 +1020,10 @@ export function useTaskBoard() {
   const isOverview = activeView === 'Visão geral'
 
   const activeTasksCount = tasks.filter((task) => task.status !== 'Concluído').length
-  const highPriorityCount = tasks.filter((task) => task.scoreGut >= 80 && task.status !== 'Concluído').length
+  const highPriorityCount = tasks.filter((task) => task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD && task.status !== 'Concluído').length
   const alertTasks = tasks
     .filter((task) => task.status !== 'Concluído')
-    .filter((task) => getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' || task.scoreGut >= 80)
+    .filter((task) => getDueState(task.due, task.status) === 'overdue' || getDueState(task.due, task.status) === 'today' || task.scoreGut >= CRITICAL_PRIORITY_THRESHOLD)
     .sort((a, b) => {
       const stateWeight = (state: DueState) => state === 'overdue' ? 3 : state === 'today' ? 2 : 1
       return stateWeight(getDueState(b.due, b.status)) - stateWeight(getDueState(a.due, a.status)) || b.scoreGut - a.scoreGut
@@ -759,8 +1053,19 @@ export function useTaskBoard() {
     updateTask(taskId, { [field]: value } as Partial<Task>)
   }
 
-  const saveTaskChanges = (task: Task) => {
-    updateTask(task.id, task)
+  const saveTaskChanges = async (task: Task) => {
+    const previous = tasks.find((item) => item.id === task.id)
+    const changed = previous && JSON.stringify(previous) !== JSON.stringify(task)
+    await updateTask(task.id, task)
+    if (changed) {
+      void recordActivity({
+        actor: actorName,
+        tone: 'amber',
+        message: 'editou',
+        taskTitle: task.title,
+        time: 'Agora',
+      })
+    }
   }
 
   return {
@@ -821,6 +1126,7 @@ export function useTaskBoard() {
     toggleChecklist,
     addTask,
     deleteTask,
+    deleteAllTasks,
     addChecklistItem,
     removeChecklistItem,
     updateChecklistLabel,
@@ -836,5 +1142,9 @@ export function useTaskBoard() {
     statusOrder,
     dueToInputValue,
     inputValueToDue,
+    isLoadingTasks,
+    isLoadingActivities,
+    syncError,
+    syncFromServer,
   }
 }

@@ -1,19 +1,60 @@
 import { describe, expect, it } from 'vitest'
 import {
   computeScore,
+  describeRequestError,
   formatDueDate,
+  formatDateForDisplay,
+  formatDateForInput,
   getDueState,
+  getImportanceCategory,
+  getImportanceValue,
+  getUrgencyCategory,
+  getUrgencyValue,
   getPriorityBand,
   getPriorityLabel,
   normalizeDueDate,
   parseCsv,
+  parseBrazilianDate,
   resolveDueForStatus,
 } from './taskUtils'
 
 describe('computeScore', () => {
-  it('multiplica gravidade, urgência e tendência', () => {
-    expect(computeScore(5, 4, 5)).toBe(100)
-    expect(computeScore(3, 3, 3)).toBe(27)
+  it('multiplica importância e urgência', () => {
+    expect(computeScore(5, 4)).toBe(20)
+    expect(computeScore(5, 5)).toBe(25)
+    expect(computeScore(3, 3)).toBe(9)
+  })
+})
+
+describe('importance categories', () => {
+  it('groups importance scores into low, high and extreme categories', () => {
+    expect(getImportanceCategory(1)).toBe('Baixa')
+    expect(getImportanceCategory(2)).toBe('Baixa')
+    expect(getImportanceCategory(3)).toBe('Alta')
+    expect(getImportanceCategory(4)).toBe('Alta')
+    expect(getImportanceCategory(5)).toBe('Extrema')
+  })
+
+  it('maps each category to a representative score', () => {
+    expect(getImportanceValue('Baixa')).toBe(2)
+    expect(getImportanceValue('Alta')).toBe(4)
+    expect(getImportanceValue('Extrema')).toBe(5)
+  })
+})
+
+describe('urgency categories', () => {
+  it('groups urgency scores into little, medium and much categories', () => {
+    expect(getUrgencyCategory(1)).toBe('Pouca')
+    expect(getUrgencyCategory(2)).toBe('Pouca')
+    expect(getUrgencyCategory(3)).toBe('Media')
+    expect(getUrgencyCategory(4)).toBe('Media')
+    expect(getUrgencyCategory(5)).toBe('Muita')
+  })
+
+  it('maps each category to a representative score', () => {
+    expect(getUrgencyValue('Pouca')).toBe(2)
+    expect(getUrgencyValue('Media')).toBe(4)
+    expect(getUrgencyValue('Muita')).toBe(5)
   })
 })
 
@@ -43,6 +84,18 @@ describe('getDueState', () => {
   })
 })
 
+describe('Brazilian date formatting', () => {
+  it('formats dates as dd/mm/yyyy for display and input', () => {
+    expect(formatDateForDisplay('2026-09-14')).toBe('14/09/2026')
+    expect(formatDateForInput('2026-09-14')).toBe('14/09/2026')
+  })
+
+  it('parses valid Brazilian dates and rejects impossible dates', () => {
+    expect(parseBrazilianDate('14/09/2026')).toBe('2026-09-14')
+    expect(parseBrazilianDate('31/02/2026')).toBeNull()
+  })
+})
+
 describe('parseCsv', () => {
   it('handles quoted delimiters, escaped quotes and multiline fields', () => {
     expect(parseCsv('Tarefa;Anotações\r\n"Conferir; revisar";"Disse ""ok""\nequipe"')).toEqual([
@@ -65,17 +118,24 @@ describe('resolveDueForStatus', () => {
 })
 
 describe('getPriorityBand', () => {
-  it('classifica corretamente a faixa de prioridade do score GUT', () => {
-    expect(getPriorityBand(100)).toBe('critical')
-    expect(getPriorityBand(70)).toBe('high')
-    expect(getPriorityBand(30)).toBe('low')
+  it('classifica corretamente a faixa de prioridade', () => {
+    expect(getPriorityBand(20)).toBe('critical')
+    expect(getPriorityBand(12)).toBe('high')
+    expect(getPriorityBand(9)).toBe('low')
   })
 })
 
 describe('getPriorityLabel', () => {
   it('atribui o nome correto da prioridade', () => {
-    expect(getPriorityLabel(100)).toBe('Alta prioridade')
-    expect(getPriorityLabel(70)).toBe('Média')
-    expect(getPriorityLabel(30)).toBe('Baixa')
+    expect(getPriorityLabel(20)).toBe('Alta prioridade')
+    expect(getPriorityLabel(12)).toBe('Média')
+    expect(getPriorityLabel(9)).toBe('Baixa')
+  })
+})
+
+describe('describeRequestError', () => {
+  it('expõe uma mensagem útil para falha de rede e para erro do backend', () => {
+    expect(describeRequestError(new Error('Failed to fetch'))).toBe('Não foi possível conectar ao servidor. Verifique a rede e tente novamente.')
+    expect(describeRequestError(new Error('Request failed: 500'))).toBe('O servidor respondeu com erro. Tente novamente em instantes.')
   })
 })
