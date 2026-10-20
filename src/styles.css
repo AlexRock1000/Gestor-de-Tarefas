@@ -1084,6 +1084,26 @@ h2 {
 .history-header h1 { margin-bottom: 8px; }
 .history-header p:not(.eyebrow) { color: #a0a29c; font-size: 16px; margin: 0; }
 .history-count { color: #84928e; font-size: 13px; white-space: nowrap; }
+.history-header-actions,
+.tasks-header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+.history-header-actions .text-button { white-space: nowrap; }
+.bulk-delete-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid rgba(212, 92, 79, 0.38);
+  border-radius: 9px;
+  background: transparent;
+  color: #e98a80;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.bulk-delete-button:hover:not(:disabled) { background: rgba(212, 92, 79, 0.12); }
+.bulk-delete-button:disabled { opacity: .45; cursor: not-allowed; }
 .history-list {
   overflow: hidden;
   border: 1px solid var(--line);
@@ -2585,6 +2605,8 @@ h1, h2, h3,
   .content-wrap { padding: 16px 10px 30px; }
   .panel-header { padding: 17px 13px 12px; }
   .tasks-heading-row { align-items: flex-start; }
+  .tasks-header-actions { flex-direction: column-reverse; align-items: stretch; gap: 6px; }
+  .bulk-delete-button { min-height: 34px; padding: 0 8px; font-size: 10px; }
   .tasks-heading-row h2 { font-size: 22px; }
   .tasks-heading-row p:not(.eyebrow) { max-width: 190px; font-size: 11px; }
   .tasks-heading-row .primary-button { min-height: 38px; padding: 0 12px; font-size: 11px; white-space: nowrap; }

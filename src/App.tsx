@@ -21,6 +21,7 @@ import {
   Sparkles,
   SunMedium,
   Target,
+  Trash2,
   Upload,
 } from 'lucide-react'
 import { CRITICAL_PRIORITY_THRESHOLD, getDueState, getPriorityBand } from './taskUtils'
@@ -63,6 +64,7 @@ function App() {
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [loginError, setLoginError] = useState<string | null>(null)
+  const [sessionError, setSessionError] = useState<string | null>(null)
   const [isLoggingIn, setIsLoggingIn] = useState(false)
   const [filtersExpanded, setFiltersExpanded] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -132,6 +134,7 @@ function App() {
     handleKanbanDrop,
     addTask,
     deleteTask,
+    deleteAllTasks,
     copyPrompt,
     exportTasks,
     importTasks,
@@ -144,24 +147,25 @@ function App() {
     syncFromServer,
   } = useTaskBoard(profileName, authStatus === 'authenticated')
 
+  const validateSession = async () => {
+    setAuthStatus('checking')
+    setSessionError(null)
+    try {
+      const response = await fetch('/api/auth/session', { credentials: 'include' })
+      if (!response.ok) throw new Error('Não foi possível validar a sessão.')
+      const session = await response.json() as { authenticated: boolean; authenticationEnabled: boolean; username: string | null }
+      setAuthenticationEnabled(session.authenticationEnabled)
+      setAuthStatus(session.authenticated ? 'authenticated' : 'anonymous')
+      if (session.username) setProfileName(session.username)
+    } catch {
+      // A interface protegida nunca é liberada sem confirmação do servidor.
+      setAuthStatus('anonymous')
+      setSessionError('Não foi possível validar sua sessão. Verifique a conexão e tente novamente.')
+    }
+  }
+
   useEffect(() => {
-    let active = true
-    fetch('/api/auth/session', { credentials: 'include' })
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Não foi possível validar a sessão.')
-        return response.json() as Promise<{ authenticated: boolean; authenticationEnabled: boolean; username: string | null }>
-      })
-      .then((session) => {
-        if (!active) return
-        setAuthenticationEnabled(session.authenticationEnabled)
-        setAuthStatus(session.authenticated ? 'authenticated' : 'anonymous')
-        if (session.username) setProfileName(session.username)
-      })
-      .catch(() => {
-        // A interface continua disponível com o cache local quando a API está offline.
-        if (active) setAuthStatus('authenticated')
-      })
-    return () => { active = false }
+    void validateSession()
   }, [])
 
   useEffect(() => {
@@ -256,11 +260,12 @@ function App() {
     }
   }
   const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', { method: 'POST', credentials: 'include' })
-    } finally {
-      setAuthStatus('anonymous')
-    }
+    setAuthStatus('anonymous')
+    setSelectedTaskId(null)
+    setEditingTask(null)
+    setIsCreatingTask(false)
+    setProfileMenuOpen(false)
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => undefined)
   }
   const selectTaskFilter = (filter: 'Todos' | 'Hoje' | 'Urgentes' | 'Concluídas') => {
     clearFilters()
@@ -293,6 +298,14 @@ function App() {
     deleteTask(selectedTask.id)
     showToast('Tarefa removida')
     setSelectedTaskId(null)
+  }
+
+  const handleDeleteAllTasks = () => {
+    if (!tasks.length) return
+    const confirmed = window.confirm(`Excluir permanentemente todas as ${tasks.length} tarefas? O histórico de atividades será preservado.`)
+    if (!confirmed) return
+    deleteAllTasks()
+    showToast('Tarefas excluídas; histórico preservado')
   }
 
   const handleImportTasks = async (event: ChangeEvent<HTMLInputElement>) => {
@@ -442,7 +455,13 @@ function App() {
           <h1>Histórico</h1>
           <p>Veja as últimas movimentações feitas no plano de ação.</p>
         </div>
-        <span className="history-count">{activities.length} eventos</span>
+        <div className="history-header-actions">
+          <span className="history-count">{activities.length} eventos</span>
+          <button className="text-button" type="button" onClick={() => {
+            exportActivitiesCsv(activities)
+            showToast('Histórico completo exportado em CSV')
+          }}><Download size={15} /> Exportar histórico</button>
+        </div>
       </div>
 
       {!activities.length ? (
@@ -602,7 +621,10 @@ function App() {
               <h2>Minhas tarefas</h2>
               <p>Escolha uma tarefa e avance no seu ritmo.</p>
             </div>
-            <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
+            <div className="tasks-header-actions">
+              <button className="bulk-delete-button" type="button" onClick={handleDeleteAllTasks} disabled={!tasks.length}><Trash2 size={15} /> Excluir todas</button>
+              <button className="primary-button" onClick={addTask}><Plus size={17} /> Nova tarefa</button>
+            </div>
           </div>
 
           <div className="filter-group">
@@ -794,6 +816,11 @@ function App() {
           <h1>{authStatus === 'checking' ? 'Validando acesso' : 'Acesse seu espaço'}</h1>
           {authStatus === 'checking' ? (
             <p role="status">Verificando sua sessão segura…</p>
+          ) : sessionError ? (
+            <>
+              <p className="auth-error" role="alert">{sessionError}</p>
+              <button className="primary-button" type="button" onClick={() => void validateSession()}>Tentar novamente</button>
+            </>
           ) : (
             <>
               <label>

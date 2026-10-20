@@ -16,6 +16,7 @@ import { initializeDatabase, pool } from './db'
 import {
   createTasks,
   createTask,
+  deleteAllTasks,
   deleteTask,
   findTask,
   listTasks,
@@ -191,6 +192,11 @@ app.delete('/api/tasks/:id', async (req, res) => {
   }
 
   res.status(204).send()
+})
+
+app.delete('/api/tasks', async (_req, res) => {
+  const deletedCount = await deleteAllTasks()
+  res.json({ deletedCount })
 })
 
 const startServer = async () => {

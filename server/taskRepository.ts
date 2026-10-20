@@ -184,3 +184,8 @@ export const deleteTask = async (id: number): Promise<boolean> => {
   const [result] = await pool.execute<ResultSetHeader>('DELETE FROM tasks WHERE id = ?', [id])
   return result.affectedRows > 0
 }
+
+export const deleteAllTasks = async (): Promise<number> => {
+  const [result] = await pool.execute<ResultSetHeader>('DELETE FROM tasks')
+  return result.affectedRows
+}

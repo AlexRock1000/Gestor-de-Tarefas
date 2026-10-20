@@ -191,6 +191,7 @@ type PendingOperation =
   | { kind: 'create-task'; task: Task }
   | { kind: 'update-task'; task: Task }
   | { kind: 'delete-task'; taskId: number }
+  | { kind: 'delete-all-tasks' }
   | { kind: 'create-activity'; activity: Omit<Activity, 'id'>; localId: number }
 
 const readPendingOperations = (): PendingOperation[] => {
@@ -259,20 +260,20 @@ const initialActivities: Activity[] = [
 export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
   const [tasks, setTasks] = useState<Task[]>(() => {
     if (typeof window === 'undefined') {
-      return initialTasks
+      return []
     }
 
     const stored = window.localStorage.getItem(storageKey)
 
     if (!stored) {
-      return initialTasks
+      return []
     }
 
     try {
       const parsed = JSON.parse(stored) as unknown[]
-      return Array.isArray(parsed) ? parsed.map(normalizeTask) : initialTasks
+      return Array.isArray(parsed) ? parsed.map(normalizeTask) : []
     } catch {
-      return initialTasks
+      return []
     }
   })
 
@@ -294,17 +295,19 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
   const [isLoadingActivities, setIsLoadingActivities] = useState(true)
   const [syncError, setSyncError] = useState<string | null>(null)
   const [activities, setActivities] = useState<Activity[]>(() => {
-    if (typeof window === 'undefined') return initialActivities
+    if (typeof window === 'undefined') return []
     const stored = window.localStorage.getItem(activityStorageKey)
-    if (!stored) return initialActivities
+    if (!stored) return []
     try {
       const parsed = JSON.parse(stored) as Activity[]
-      return Array.isArray(parsed) ? parsed : initialActivities
+      return Array.isArray(parsed) ? parsed : []
     } catch {
-      return initialActivities
+      return []
     }
   })
   const isFlushingOperations = useRef(false)
+  const isSyncing = useRef(false)
+  const syncRequestedAgain = useRef(false)
 
   const enqueueOperation = (operation: PendingOperation) => {
     const pending = readPendingOperations()
@@ -372,6 +375,8 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
         } catch (error) {
           if (!(error instanceof Error) || error.message !== 'Request failed: 404') throw error
         }
+        } else if (operation.kind === 'delete-all-tasks') {
+          await apiRequest('/tasks', { method: 'DELETE' })
         } else {
         const savedActivity = await apiRequest<Activity>('/activities', {
           method: 'POST',
@@ -403,6 +408,11 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
   }
 
   const syncFromServer = async () => {
+    if (isSyncing.current) {
+      syncRequestedAgain.current = true
+      return
+    }
+    isSyncing.current = true
     setSyncError(null)
     setIsLoadingTasks(true)
     setIsLoadingActivities(true)
@@ -424,6 +434,8 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
         } else if (operation.kind === 'delete-task') {
           const index = mergedTasks.findIndex((task) => task.id === operation.taskId)
           if (index >= 0) mergedTasks.splice(index, 1)
+        } else if (operation.kind === 'delete-all-tasks') {
+          mergedTasks.length = 0
         } else if (!mergedActivities.some((activity) => activity.id === operation.localId)) {
           mergedActivities.unshift({ ...operation.activity, id: operation.localId })
         }
@@ -436,11 +448,32 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
     } finally {
       setIsLoadingTasks(false)
       setIsLoadingActivities(false)
+      isSyncing.current = false
+      if (syncRequestedAgain.current && syncEnabled) {
+        syncRequestedAgain.current = false
+        void syncFromServer()
+      }
     }
   }
 
+  const syncFromServerRef = useRef(syncFromServer)
+  syncFromServerRef.current = syncFromServer
+
   useEffect(() => {
-    if (syncEnabled) void syncFromServer()
+    if (!syncEnabled) return
+    const sync = () => { void syncFromServerRef.current() }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') sync()
+    }
+    sync()
+    window.addEventListener('online', sync)
+    window.addEventListener('focus', sync)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.removeEventListener('online', sync)
+      window.removeEventListener('focus', sync)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
   }, [syncEnabled])
 
   useEffect(() => {
@@ -667,6 +700,23 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
     }
 
     if (task) void recordActivity({ actor: actorName, tone: 'coral', message: 'removeu', taskTitle: task.title, time: 'Agora' })
+  }
+
+  const deleteAllTasks = () => {
+    if (!tasks.length) return
+    const deletedCount = tasks.length
+    setTasks([])
+    setSelectedTaskId(null)
+    enqueueOperation({ kind: 'delete-all-tasks' })
+    void syncFromServer()
+    void recordActivity({
+      actor: actorName,
+      tone: 'coral',
+      message: 'excluiu todas as tarefas',
+      taskTitle: `${deletedCount} tarefa${deletedCount === 1 ? '' : 's'}`,
+      time: 'Agora',
+      createdAt: new Date().toISOString(),
+    })
   }
 
   const addChecklistItem = (taskId: number) => {
@@ -1076,6 +1126,7 @@ export function useTaskBoard(actorName = 'Daniel Rocha', syncEnabled = true) {
     toggleChecklist,
     addTask,
     deleteTask,
+    deleteAllTasks,
     addChecklistItem,
     removeChecklistItem,
     updateChecklistLabel,
