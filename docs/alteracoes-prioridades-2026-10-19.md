@@ -28,6 +28,9 @@ Em produção (`NODE_ENV=production`), o servidor não inicia sem `TASK_APP_USER
 2. Em produção, sirva a aplicação por HTTPS e configure `APP_ORIGIN` com a origem exata do frontend.
 3. Não use os valores demonstrativos de `.env.example` como credenciais reais. O arquivo `.env` não deve ser commitado.
 4. No desenvolvimento local, se as três variáveis de autenticação estiverem ausentes, a API permanece sem login para facilitar o uso offline; se alguma delas for definida, todas são obrigatórias.
+5. Mantenha `TASK_APP_PASSWORD` entre aspas no `.env`, especialmente quando contiver `#` (por exemplo, `TASK_APP_PASSWORD="senha#forte"`). Sem aspas, o parser dotenv pode interpretar `#` como início de comentário e truncar o valor. Em caso de falha de login, a mensagem agora inclui essa orientação; reinicie o servidor após alterar o `.env`.
+
+O teste `server/auth.test.ts` verifica tanto o parsing de senha citada com `#` quanto a validação integral da senha e da sessão.
 
 ### Limites de segurança conhecidos
 

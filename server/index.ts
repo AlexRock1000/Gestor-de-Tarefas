@@ -1,3 +1,4 @@
+// Carrega .env antes da configuração de autenticação e do banco.
 import 'dotenv/config'
 import cors from 'cors'
 import express from 'express'
@@ -56,7 +57,9 @@ app.post('/api/auth/login', (req, res) => {
   if (!verifyCredentials(username, password)) {
     const current = attempts && attempts.resetAt > now ? attempts : { count: 0, resetAt: now + 15 * 60_000 }
     failedLoginAttempts.set(clientKey, { ...current, count: current.count + 1 })
-    res.status(401).json({ message: 'Usuário ou senha inválidos.' })
+    res.status(401).json({
+      message: 'Usuário ou senha inválidos. Se a senha no .env contém #, coloque o valor entre aspas e reinicie o servidor.',
+    })
     return
   }
 
